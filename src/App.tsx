@@ -16,7 +16,7 @@ function App() {
   const {
     tasks, categories, loading, error,
     completeTask, addTask, updateTask, deleteTask, reorderTasks,
-    addCategory, updateCategory, deleteCategory, refetch,
+    addCategory, updateCategory, deleteCategory, reorderCategories, refetch,
   } = useTasks();
 
   const [tab, setTab] = useState<Tab>('today');
@@ -56,10 +56,10 @@ function App() {
       {/* Header */}
       <div className="bg-white border-b border-gray-100 px-5 pt-12 pb-4 sticky top-0 z-40">
         <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
+          <button onClick={signOut} className="flex items-center gap-2 active:opacity-70 transition-opacity">
             <span className="text-2xl">{user.emoji}</span>
             <h1 className="text-xl font-bold text-gray-900">{user.name}'s Tasks</h1>
-          </div>
+          </button>
           <div className="flex gap-2 items-center">
             {tab === 'all' && (
               <button onClick={() => setShowAddCategory(true)}
@@ -70,10 +70,6 @@ function App() {
             <button onClick={() => setShowAdd(true)}
               className="bg-blue-500 text-white w-9 h-9 rounded-full text-xl font-light flex items-center justify-center shadow-sm hover:bg-blue-600 transition-colors">
               +
-            </button>
-            <button onClick={signOut}
-              className="text-gray-300 hover:text-gray-500 text-xs transition-colors ml-1">
-              ⇄
             </button>
           </div>
         </div>
@@ -100,7 +96,10 @@ function App() {
               onEditCategory={setEditingCategory}
               onReorder={(activeId, overId, activeCat, overCat, cats) =>
                 reorderTasks(activeId, overId, activeCat, overCat, cats)}
+              onReorderCategories={(oldIndex, newIndex, cats) =>
+                reorderCategories(oldIndex, newIndex, cats)}
             />
+
         }
       </div>
 
