@@ -159,7 +159,7 @@ export function CategoryBoard({ categories, onComplete, onTaskClick, onEditCateg
   const findTaskCategory = (taskId: string) =>
     categories.find(c => c.tasks.some(t => t.id === taskId))?.name || '';
 
-  const findCategoryFromOver = (over: Active | { id: string }) => {
+const findCategoryFromOver = (over: { id: string | number }) => {
     // Is it a task id?
     const taskCat = categories.find(c => c.tasks.some(t => t.id === over.id));
     if (taskCat) return taskCat.name;
