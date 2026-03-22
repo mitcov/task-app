@@ -84,7 +84,7 @@ export function CategoryEditModal({ category, onSave, onUpdate, onDelete, onClos
               Yes, delete everything
             </button>
             <button onClick={() => setConfirmDelete(false)}
-              className="flex-1 border border-gray-200 text-gray-500 font-semibold py-3 rounded-2xl transition-colors text-sm">
+              className="flex-1 border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 font-semibold py-3 rounded-2xl transition-colors text-sm">
               Cancel
             </button>
           </div>

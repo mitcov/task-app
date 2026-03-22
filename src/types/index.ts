@@ -26,12 +26,13 @@ export interface Category {
 }
 
 export const CATEGORY_COLORS: Record<string, string> = {
-  Red: 'bg-red-100 text-red-700 border-red-200',
-  Orange: 'bg-orange-100 text-orange-700 border-orange-200',
-  Yellow: 'bg-yellow-100 text-yellow-700 border-yellow-200',
-  Green: 'bg-green-100 text-green-700 border-green-200',
-  Blue: 'bg-blue-100 text-blue-700 border-blue-200',
-  Purple: 'bg-purple-100 text-purple-700 border-purple-200',
-  Pink: 'bg-pink-100 text-pink-700 border-pink-200',
-  Gray: 'bg-gray-100 text-gray-700 border-gray-200',
+  Red: 'bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800',
+  Orange: 'bg-orange-100 dark:bg-orange-950 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-800',
+  Yellow: 'bg-yellow-100 dark:bg-yellow-950 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800',
+  Green: 'bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800',
+  Blue: 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
+  Purple: 'bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800',
+  Pink: 'bg-pink-100 dark:bg-pink-950 text-pink-700 dark:text-pink-300 border-pink-200 dark:border-pink-800',
+  Gray: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700',
 };
+

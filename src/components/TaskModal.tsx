@@ -20,7 +20,7 @@ export function TaskModal({ task, existingCategories, onSave, onDelete, onClose 
   const [priority, setPriority] = useState<Priority>(task?.priority || '🟡 Medium');
   const [recurrence, setRecurrence] = useState<Recurrence>(task?.recurrence || 'None');
   const [recurrenceDay, setRecurrenceDay] = useState<RecurrenceDay>(task?.recurrenceDay || 'Sunday');
-  const [dueDate, setDueDate] = useState(task?.dueDate || '');
+  const [dueDate, setDueDate] = useState(task?.dueDate ? task.dueDate.split('T')[0] : '');
   const [notes, setNotes] = useState(task?.notes || '');
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -151,7 +151,7 @@ export function TaskModal({ task, existingCategories, onSave, onDelete, onClose 
               Due Date (optional)
             </label>
             <input
-              type="datetime-local"
+              type="date"
               value={dueDate}
               onChange={e => setDueDate(e.target.value)}
               className="w-full border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
