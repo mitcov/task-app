@@ -1,91 +1,104 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { Client } = require('@notionhq/client');
+const { Pool } = require('pg');
+const webpush = require('web-push');
+const cron = require('node-cron');
 
 const app = express();
-const notion = new Client({ auth: process.env.NOTION_TOKEN });
-const DB_ID = process.env.NOTION_DB_ID;
-const CAT_DB_ID = process.env.NOTION_CATEGORIES_DB_ID;
+const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
 
 app.use(cors({ origin: process.env.FRONTEND_URL || '*' }));
 app.use(express.json());
 
-// ── Task Helpers ──────────────────────────────────────────────────────────────
+// ── VAPID Setup ───────────────────────────────────────────────────────────────
+webpush.setVapidDetails(
+  'mailto:' + (process.env.VAPID_EMAIL || 'admin@justdoit.app'),
+  process.env.VAPID_PUBLIC_KEY || '',
+  process.env.VAPID_PRIVATE_KEY || ''
+);
 
-function pageToTask(page) {
-  const p = page.properties;
+// ── DB Init ───────────────────────────────────────────────────────────────────
+async function initDB() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS tasks (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'Uncategorized',
+      status TEXT NOT NULL DEFAULT 'To Do',
+      priority TEXT NOT NULL DEFAULT '🟡 Medium',
+      recurrence TEXT NOT NULL DEFAULT 'None',
+      recurrence_day TEXT,
+      due_date DATE,
+      reminder_time TIME,
+      sort_order INTEGER DEFAULT 999,
+      last_completed TIMESTAMPTZ,
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS reminders (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
+      offset_minutes INTEGER NOT NULL,
+      label TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS categories (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      color TEXT NOT NULL DEFAULT 'Gray',
+      sort_order INTEGER DEFAULT 999,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(user_id, name)
+    );
+
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id TEXT NOT NULL,
+      subscription JSONB NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+  console.log('DB initialized');
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function rowToTask(row, reminders = []) {
   return {
-    id: page.id,
-    title: p.Name?.title?.[0]?.plain_text || '',
-    category: p.Category?.select?.name || 'Uncategorized',
-    status: p.Status?.select?.name || 'To Do',
-    priority: p.Priority?.select?.name || '🟡 Medium',
-    recurrence: p.Recurrence?.select?.name || 'None',
-    recurrenceDay: p['Recurrence Day']?.select?.name || null,
-    dueDate: p['Due Date']?.date?.start || null,
-    sortOrder: p['Sort Order']?.number ?? 999,
-    lastCompleted: p['Last Completed']?.date?.start || null,
-    notes: p.Notes?.rich_text?.[0]?.plain_text || '',
-    userId: p.User?.rich_text?.[0]?.plain_text || '',
+    id: row.id,
+    userId: row.user_id,
+    title: row.title,
+    category: row.category,
+    status: row.status,
+    priority: row.priority,
+    recurrence: row.recurrence,
+    recurrenceDay: row.recurrence_day,
+    dueDate: row.due_date ? row.due_date.toISOString().split('T')[0] : null,
+    reminderTime: row.reminder_time || null,
+    sortOrder: row.sort_order,
+    lastCompleted: row.last_completed,
+    notes: row.notes,
+    reminders: reminders.map(r => ({
+      id: r.id,
+      offsetMinutes: r.offset_minutes,
+      label: r.label,
+    })),
   };
 }
 
-function taskToProperties(task) {
-  const props = {};
-  if (task.title !== undefined)
-    props.Name = { title: [{ text: { content: task.title } }] };
-  if (task.category !== undefined)
-    props.Category = { select: { name: task.category } };
-  if (task.status !== undefined)
-    props.Status = { select: { name: task.status } };
-  if (task.priority !== undefined)
-    props.Priority = { select: { name: task.priority } };
-  if (task.recurrence !== undefined)
-    props.Recurrence = { select: { name: task.recurrence } };
-  if (task.recurrenceDay !== undefined)
-    props['Recurrence Day'] = task.recurrenceDay
-      ? { select: { name: task.recurrenceDay } }
-      : { select: null };
-  if (task.dueDate !== undefined)
-    props['Due Date'] = task.dueDate ? { date: { start: task.dueDate } } : { date: null };
-  if (task.sortOrder !== undefined)
-    props['Sort Order'] = { number: task.sortOrder };
-  if (task.lastCompleted !== undefined)
-    props['Last Completed'] = task.lastCompleted
-      ? { date: { start: task.lastCompleted } }
-      : { date: null };
-  if (task.notes !== undefined)
-    props.Notes = { rich_text: [{ text: { content: task.notes } }] };
-  if (task.userId !== undefined)
-    props.User = { rich_text: [{ text: { content: task.userId } }] };
-  return props;
-}
-
-// ── Category Helpers ──────────────────────────────────────────────────────────
-
-function pageToCategory(page) {
-  const p = page.properties;
+function rowToCategory(row) {
   return {
-    id: page.id,
-    name: p.Name?.title?.[0]?.plain_text || '',
-    sortOrder: p['Sort Order']?.number ?? 999,
-    color: p.Color?.select?.name || 'Gray',
-    userId: p.User?.rich_text?.[0]?.plain_text || '',
+    id: row.id,
+    userId: row.user_id,
+    name: row.name,
+    color: row.color,
+    sortOrder: row.sort_order,
   };
-}
-
-function categoryToProperties(cat) {
-  const props = {};
-  if (cat.name !== undefined)
-    props.Name = { title: [{ text: { content: cat.name } }] };
-  if (cat.sortOrder !== undefined)
-    props['Sort Order'] = { number: cat.sortOrder };
-  if (cat.color !== undefined)
-    props.Color = { select: { name: cat.color } };
-  if (cat.userId !== undefined)
-    props.User = { rich_text: [{ text: { content: cat.userId } }] };
-  return props;
 }
 
 // ── Task Routes ───────────────────────────────────────────────────────────────
@@ -93,17 +106,20 @@ function categoryToProperties(cat) {
 app.get('/tasks', async (req, res) => {
   try {
     const { userId } = req.query;
-    const filter = userId ? {
-      property: 'User',
-      rich_text: { equals: userId }
-    } : undefined;
-
-    const response = await notion.databases.query({
-      database_id: DB_ID,
-      filter,
-      sorts: [{ property: 'Sort Order', direction: 'ascending' }],
+    const tasks = await pool.query(
+      'SELECT * FROM tasks WHERE user_id = $1 ORDER BY sort_order ASC, created_at ASC',
+      [userId]
+    );
+    const reminders = await pool.query(
+      'SELECT * FROM reminders WHERE task_id = ANY($1)',
+      [tasks.rows.map(t => t.id)]
+    );
+    const reminderMap = {};
+    reminders.rows.forEach(r => {
+      if (!reminderMap[r.task_id]) reminderMap[r.task_id] = [];
+      reminderMap[r.task_id].push(r);
     });
-    res.json(response.results.map(pageToTask));
+    res.json(tasks.rows.map(t => rowToTask(t, reminderMap[t.id] || [])));
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: e.message });
@@ -112,11 +128,33 @@ app.get('/tasks', async (req, res) => {
 
 app.post('/tasks', async (req, res) => {
   try {
-    const page = await notion.pages.create({
-      parent: { database_id: DB_ID },
-      properties: taskToProperties(req.body),
-    });
-    res.status(201).json(pageToTask(page));
+    const {
+      userId, title, category, status, priority, recurrence,
+      recurrenceDay, dueDate, reminderTime, sortOrder, notes, reminders
+    } = req.body;
+
+    const result = await pool.query(
+      `INSERT INTO tasks (user_id, title, category, status, priority, recurrence, recurrence_day, due_date, reminder_time, sort_order, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [userId, title, category, status || 'To Do', priority || '🟡 Medium',
+       recurrence || 'None', recurrenceDay || null, dueDate || null,
+       reminderTime || null, sortOrder ?? 999, notes || null]
+    );
+
+    const task = result.rows[0];
+    let savedReminders = [];
+
+    if (reminders && reminders.length > 0) {
+      for (const r of reminders) {
+        const rr = await pool.query(
+          'INSERT INTO reminders (task_id, offset_minutes, label) VALUES ($1,$2,$3) RETURNING *',
+          [task.id, r.offsetMinutes, r.label]
+        );
+        savedReminders.push(rr.rows[0]);
+      }
+    }
+
+    res.status(201).json(rowToTask(task, savedReminders));
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: e.message });
@@ -125,11 +163,49 @@ app.post('/tasks', async (req, res) => {
 
 app.patch('/tasks/:id', async (req, res) => {
   try {
-    const page = await notion.pages.update({
-      page_id: req.params.id,
-      properties: taskToProperties(req.body),
-    });
-    res.json(pageToTask(page));
+    const { id } = req.params;
+    const {
+      title, category, status, priority, recurrence,
+      recurrenceDay, dueDate, reminderTime, sortOrder,
+      lastCompleted, notes, reminders
+    } = req.body;
+
+    const result = await pool.query(
+      `UPDATE tasks SET
+        title = COALESCE($1, title),
+        category = COALESCE($2, category),
+        status = COALESCE($3, status),
+        priority = COALESCE($4, priority),
+        recurrence = COALESCE($5, recurrence),
+        recurrence_day = COALESCE($6, recurrence_day),
+        due_date = COALESCE($7, due_date),
+        reminder_time = COALESCE($8, reminder_time),
+        sort_order = COALESCE($9, sort_order),
+        last_completed = COALESCE($10, last_completed),
+        notes = COALESCE($11, notes)
+       WHERE id = $12 RETURNING *`,
+      [title, category, status, priority, recurrence, recurrenceDay,
+       dueDate || null, reminderTime || null, sortOrder,
+       lastCompleted || null, notes, id]
+    );
+
+    // Update reminders if provided
+    let savedReminders = [];
+    if (reminders !== undefined) {
+      await pool.query('DELETE FROM reminders WHERE task_id = $1', [id]);
+      for (const r of reminders) {
+        const rr = await pool.query(
+          'INSERT INTO reminders (task_id, offset_minutes, label) VALUES ($1,$2,$3) RETURNING *',
+          [id, r.offsetMinutes, r.label]
+        );
+        savedReminders.push(rr.rows[0]);
+      }
+    } else {
+      const existing = await pool.query('SELECT * FROM reminders WHERE task_id = $1', [id]);
+      savedReminders = existing.rows;
+    }
+
+    res.json(rowToTask(result.rows[0], savedReminders));
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: e.message });
@@ -138,7 +214,7 @@ app.patch('/tasks/:id', async (req, res) => {
 
 app.delete('/tasks/:id', async (req, res) => {
   try {
-    await notion.pages.update({ page_id: req.params.id, archived: true });
+    await pool.query('DELETE FROM tasks WHERE id = $1', [req.params.id]);
     res.status(204).end();
   } catch (e) {
     console.error(e);
@@ -151,10 +227,7 @@ app.post('/tasks/reorder', async (req, res) => {
     const { taskIds } = req.body;
     await Promise.all(
       taskIds.map((id, index) =>
-        notion.pages.update({
-          page_id: id,
-          properties: { 'Sort Order': { number: index } },
-        })
+        pool.query('UPDATE tasks SET sort_order = $1 WHERE id = $2', [index, id])
       )
     );
     res.json({ ok: true });
@@ -169,17 +242,11 @@ app.post('/tasks/reorder', async (req, res) => {
 app.get('/categories', async (req, res) => {
   try {
     const { userId } = req.query;
-    const filter = userId ? {
-      property: 'User',
-      rich_text: { equals: userId }
-    } : undefined;
-
-    const response = await notion.databases.query({
-      database_id: CAT_DB_ID,
-      filter,
-      sorts: [{ property: 'Sort Order', direction: 'ascending' }],
-    });
-    res.json(response.results.map(pageToCategory));
+    const result = await pool.query(
+      'SELECT * FROM categories WHERE user_id = $1 ORDER BY sort_order ASC, created_at ASC',
+      [userId]
+    );
+    res.json(result.rows.map(rowToCategory));
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: e.message });
@@ -188,11 +255,15 @@ app.get('/categories', async (req, res) => {
 
 app.post('/categories', async (req, res) => {
   try {
-    const page = await notion.pages.create({
-      parent: { database_id: CAT_DB_ID },
-      properties: categoryToProperties(req.body),
-    });
-    res.status(201).json(pageToCategory(page));
+    const { userId, name, color, sortOrder } = req.body;
+    const result = await pool.query(
+      `INSERT INTO categories (user_id, name, color, sort_order)
+       VALUES ($1,$2,$3,$4)
+       ON CONFLICT (user_id, name) DO UPDATE SET color = $3
+       RETURNING *`,
+      [userId, name, color || 'Gray', sortOrder ?? 999]
+    );
+    res.status(201).json(rowToCategory(result.rows[0]));
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: e.message });
@@ -201,11 +272,16 @@ app.post('/categories', async (req, res) => {
 
 app.patch('/categories/:id', async (req, res) => {
   try {
-    const page = await notion.pages.update({
-      page_id: req.params.id,
-      properties: categoryToProperties(req.body),
-    });
-    res.json(pageToCategory(page));
+    const { name, color, sortOrder } = req.body;
+    const result = await pool.query(
+      `UPDATE categories SET
+        name = COALESCE($1, name),
+        color = COALESCE($2, color),
+        sort_order = COALESCE($3, sort_order)
+       WHERE id = $4 RETURNING *`,
+      [name, color, sortOrder, req.params.id]
+    );
+    res.json(rowToCategory(result.rows[0]));
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: e.message });
@@ -214,7 +290,7 @@ app.patch('/categories/:id', async (req, res) => {
 
 app.delete('/categories/:id', async (req, res) => {
   try {
-    await notion.pages.update({ page_id: req.params.id, archived: true });
+    await pool.query('DELETE FROM categories WHERE id = $1', [req.params.id]);
     res.status(204).end();
   } catch (e) {
     console.error(e);
@@ -227,10 +303,7 @@ app.post('/categories/reorder', async (req, res) => {
     const { categoryIds } = req.body;
     await Promise.all(
       categoryIds.map((id, index) =>
-        notion.pages.update({
-          page_id: id,
-          properties: { 'Sort Order': { number: index } },
-        })
+        pool.query('UPDATE categories SET sort_order = $1 WHERE id = $2', [index, id])
       )
     );
     res.json({ ok: true });
@@ -240,7 +313,102 @@ app.post('/categories/reorder', async (req, res) => {
   }
 });
 
+// ── Push Subscription Routes ──────────────────────────────────────────────────
+
+app.post('/subscribe', async (req, res) => {
+  try {
+    const { userId, subscription } = req.body;
+    await pool.query(
+      `INSERT INTO push_subscriptions (user_id, subscription)
+       VALUES ($1, $2)
+       ON CONFLICT DO NOTHING`,
+      [userId, JSON.stringify(subscription)]
+    );
+    res.status(201).json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/unsubscribe', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    await pool.query('DELETE FROM push_subscriptions WHERE user_id = $1', [userId]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/vapid-public-key', (req, res) => {
+  res.json({ key: process.env.VAPID_PUBLIC_KEY });
+});
+
+// ── Reminder Cron ─────────────────────────────────────────────────────────────
+
+cron.schedule('*/5 * * * *', async () => {
+  try {
+    const now = new Date();
+    const tasks = await pool.query(`
+      SELECT t.*, r.id as reminder_id, r.offset_minutes, r.label
+      FROM tasks t
+      JOIN reminders r ON r.task_id = t.id
+      WHERE t.due_date IS NOT NULL
+      AND t.reminder_time IS NOT NULL
+      AND t.status != 'Done'
+    `);
+
+    for (const task of tasks.rows) {
+      // Build the exact datetime for this task's reminder
+      const dueDate = task.due_date.toISOString().split('T')[0];
+      const reminderTime = task.reminder_time; // e.g. "09:00:00"
+      const [hours, minutes] = reminderTime.split(':').map(Number);
+
+      const taskDateTime = new Date(`${dueDate}T${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:00`);
+      const reminderDateTime = new Date(taskDateTime.getTime() - task.offset_minutes * 60000);
+
+      // Check if this reminder should fire in the next 5 minutes
+      const diff = reminderDateTime.getTime() - now.getTime();
+      if (diff >= 0 && diff < 5 * 60 * 1000) {
+        // Get push subscriptions for this user
+        const subs = await pool.query(
+          'SELECT subscription FROM push_subscriptions WHERE user_id = $1',
+          [task.user_id]
+        );
+
+        for (const sub of subs.rows) {
+          try {
+            await webpush.sendNotification(
+              sub.subscription,
+              JSON.stringify({
+                title: 'Just Do It',
+                body: `${task.label}: ${task.title}`,
+                icon: '/icon.svg',
+              })
+            );
+          } catch (e) {
+            console.error('Push failed:', e.message);
+            // Remove invalid subscriptions
+            if (e.statusCode === 410) {
+              await pool.query(
+                'DELETE FROM push_subscriptions WHERE subscription = $1',
+                [JSON.stringify(sub.subscription)]
+              );
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Cron error:', e.message);
+  }
+});
+
 // ── Start ─────────────────────────────────────────────────────────────────────
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
+initDB().then(() => {
+  app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
+});
