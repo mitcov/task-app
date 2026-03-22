@@ -7,7 +7,7 @@ const app = express();
 const notion = new Client({ auth: process.env.NOTION_TOKEN });
 const DB_ID = process.env.NOTION_DB_ID;
 
-app.use(cors());
+app.use(cors({ origin: process.env.FRONTEND_URL || '*' }));
 app.use(express.json());
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
