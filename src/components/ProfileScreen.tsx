@@ -53,12 +53,12 @@ export function ProfileScreen({ onSelect }: Props) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-6">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col items-center justify-center px-6">
       {/* App title */}
       <div className="text-center mb-12">
         <div className="text-5xl mb-4">📋</div>
-        <h1 className="text-3xl font-bold text-gray-900">Just Do It</h1>
-        <p className="text-gray-400 mt-2 text-sm">Who's checking in?</p>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Just Do It</h1>
+        <p className="text-gray-400 dark:text-gray-500 mt-2 text-sm">Who's checking in?</p>
       </div>
 
       {/* Profile cards */}

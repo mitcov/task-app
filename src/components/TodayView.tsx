@@ -29,7 +29,7 @@ export function TodayView({ tasks, onComplete }: Props) {
 
   return (
     <div>
-      <p className="text-sm text-gray-400 mb-4">
+      <p className="text-sm text-gray-400 dark:text-gray-500 mb-4">
         {todayTasks.length === 0
           ? `Nothing scheduled for ${dayName} 🎉`
           : `${todayTasks.length} task${todayTasks.length !== 1 ? 's' : ''} for ${dayName}`}
@@ -37,14 +37,14 @@ export function TodayView({ tasks, onComplete }: Props) {
 
       {todayTasks.map(task => (
         <div key={task.id}
-          className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 mb-2 flex items-center gap-3">
+          className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-3 mb-2 flex items-center gap-3">
           <button
             onClick={() => onComplete(task.id)}
             className="w-6 h-6 rounded-full border-2 border-gray-300 hover:border-green-400 flex-shrink-0 flex items-center justify-center transition-colors"
           />
           <div className="flex-1">
-            <p className="text-sm font-medium text-gray-800">{task.title}</p>
-            <p className="text-xs text-gray-400">{task.category} · {task.priority}</p>
+            <p className="text-sm font-medium text-gray-800 dark:text-gray-100">{task.title}</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500">{task.category} · {task.priority}</p>
           </div>
           {task.recurrence !== 'None' && (
             <span className="text-xs text-blue-400">↻</span>

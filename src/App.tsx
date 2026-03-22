@@ -35,35 +35,35 @@ function App() {
   if (!user) return <ProfileScreen onSelect={selectUser} />;
 
   if (loading) return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
+
       <div className="text-center">
         <div className="text-4xl mb-3 animate-pulse">✓</div>
-        <p className="text-gray-400 text-sm">Just Do It...</p>
+        <p className="text-gray-400 dark:text-gray-500 text-sm">Just Do It...</p>
       </div>
     </div>
   );
 
   if (error) return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <p className="text-red-400 text-sm">{error}</p>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
     </div>
   );
 
   const categoryNames = categories.map(c => c.name);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* Header */}
-      <div className="bg-white border-b border-gray-100 px-5 pt-12 pb-4 sticky top-0 z-40">
+      <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-5 pt-12 pb-4 sticky top-0 z-40">
         <div className="flex items-center justify-between mb-4">
           <button onClick={signOut} className="flex items-center gap-2 active:opacity-70 transition-opacity">
             <span className="text-2xl">{user.emoji}</span>
-            <h1 className="text-xl font-bold text-gray-900">Just Do It</h1>
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white">Just Do It</h1>
           </button>
           <div className="flex gap-2 items-center">
             {tab === 'all' && (
               <button onClick={() => setShowAddCategory(true)}
-                className="bg-gray-100 text-gray-600 px-3 py-2 rounded-full text-xs font-semibold hover:bg-gray-200 transition-colors">
+                className="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-3 py-2 rounded-full text-xs font-semibold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
                 + Category
               </button>
             )}
@@ -74,11 +74,11 @@ function App() {
           </div>
         </div>
 
-        <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
+        <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
           {([['today', 'Today'], ['all', 'All Tasks']] as [Tab, string][]).map(([key, label]) => (
             <button key={key} onClick={() => setTab(key as Tab)}
               className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors
-                ${tab === key ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
+                ${tab === key ? 'bg-white dark:bg-gray-700 text-gray-800 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}>
               {label}
             </button>
           ))}

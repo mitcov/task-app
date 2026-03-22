@@ -5,3 +5,9 @@
 input, select, textarea {
   font-size: 16px !important;
 }
+
+@layer base {
+  body {
+    @apply bg-gray-50 dark:bg-gray-950;
+  }
+}

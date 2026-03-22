@@ -31,9 +31,9 @@ export function CategoryEditModal({ category, onSave, onUpdate, onDelete, onClos
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="bg-white w-full max-w-lg rounded-t-3xl p-6 pb-10">
+      <div className="bg-white dark:bg-gray-900 w-full max-w-lg rounded-t-3xl p-6 pb-10 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-bold text-gray-800">
+          <h2 className="text-lg font-bold text-gray-800 dark:text-white">
             {isEdit ? 'Edit Category' : 'New Category'}
           </h2>
           <button onClick={onClose} className="text-gray-400 text-2xl leading-none">×</button>
@@ -46,11 +46,12 @@ export function CategoryEditModal({ category, onSave, onUpdate, onDelete, onClos
             placeholder="Category name"
             value={name}
             onChange={e => setName(e.target.value)}
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+            className="w-full border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+
           />
 
           <div>
-            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 block">Color</label>
+            <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2 block">Color</label>
             <div className="flex flex-wrap gap-2">
               {COLORS.map(c => (
                 <button key={c} onClick={() => setColor(c)}

@@ -44,7 +44,7 @@ export function TaskCard({ task, onComplete, onClick, overlay }: TaskCardProps) 
     <div
       ref={setNodeRef}
       style={overlay ? {} : style}
-      className={`bg-white rounded-xl shadow-sm border border-gray-100 p-3 mb-2 flex items-center gap-3 touch-none
+      className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-3 mb-2 flex items-center gap-3 touch-none
         ${task.status === 'Done' ? 'opacity-50' : ''}
         ${overlay ? 'shadow-lg rotate-1 scale-105' : ''}`}
     >
@@ -62,7 +62,7 @@ export function TaskCard({ task, onComplete, onClick, overlay }: TaskCardProps) 
         {task.status === 'Done' && <span className="text-xs">✓</span>}
       </button>
       <div className="flex-1 min-w-0" onClick={() => onClick(task)}>
-        <p className={`text-sm font-medium truncate ${task.status === 'Done' ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+        <p className={`text-sm font-medium truncate ${task.status === 'Done' ? 'line-through text-gray-400' : 'text-gray-800 dark:text-gray-100'}`}>
           {task.title}
         </p>
         <div className="flex items-center gap-2 mt-0.5">
@@ -117,7 +117,7 @@ function CategoryColumn({ category, onComplete, onTaskClick, onEditCategory, isO
       ref={setNodeRef}
       style={style}
       className={`rounded-2xl p-4 mb-4 transition-colors border-2 touch-none
-        ${isOver && !isDraggingCategory ? 'border-blue-300 bg-blue-50' : 'border-transparent bg-gray-50'}
+        ${isOver && !isDraggingCategory ? 'border-blue-300 bg-blue-50 dark:bg-blue-950' : 'border-transparent bg-gray-50 dark:bg-gray-900'}
         ${isDragging ? 'shadow-xl' : ''}`}
     >
       <div className="flex items-center justify-between mb-3">
@@ -160,8 +160,8 @@ function CategoryColumn({ category, onComplete, onTaskClick, onEditCategory, isO
           ))}
           {category.tasks.length === 0 && (
             <div className={`border-2 border-dashed rounded-xl p-4 text-center transition-colors
-              ${isOver && !isDraggingCategory ? 'border-blue-300' : 'border-gray-200'}`}>
-              <p className="text-xs text-gray-400">Drop tasks here</p>
+              ${isOver && !isDraggingCategory ? 'border-blue-300' : 'border-gray-200 dark:border-gray-700'}`}>
+            <p className="text-xs text-gray-400 dark:text-gray-600">Drop tasks here</p>
             </div>
           )}
         </SortableContext>
