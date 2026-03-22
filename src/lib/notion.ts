@@ -2,6 +2,7 @@ import axios from 'axios';
 import { Task } from '../types';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+console.log('API_BASE:', API_BASE);
 
 export const api = {
   getTasks: async (): Promise<Task[]> => {
