@@ -14,7 +14,7 @@ type Tab = 'today' | 'all';
 function App() {
   const { user, selectUser, signOut } = useUser();
   const {
-    tasks, categories, loading, initialLoad, error,
+    tasks, categories, loading, error,
     completeTask, addTask, updateTask, deleteTask, reorderTasks,
     addCategory, updateCategory, deleteCategory, reorderCategories, refetch,
   } = useTasks();
@@ -34,7 +34,7 @@ function App() {
 
   if (!user) return <ProfileScreen onSelect={selectUser} />;
 
-  if (loading && initialLoad) return (
+  if (loading) return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
 
       <div className="text-center">
@@ -46,6 +46,7 @@ function App() {
 
   if (error) return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
+      <p className="text-red-400 text-sm">{error}</p>
     </div>
   );
 
@@ -110,7 +111,7 @@ function App() {
           onSave={async (data) => {
             const taskData = data as Omit<Task, 'id'>;
             // If this is a new category not already in our list, save it
-            if (taskData.category && !categoryNames.includes(taskData.category)) {
+            if (taskData.category && !categoryNames.some(c => c.toLowerCase() === taskData.category.toLowerCase())) {
               await addCategory(taskData.category, 'Gray');
             }
             await addTask(taskData);
@@ -119,18 +120,27 @@ function App() {
         />
       )}
       {showAddCategory && (
-        <CategoryEditModal
-          onSave={addCategory}
-          onClose={() => setShowAddCategory(false)}
-        />
-      )}
+      <CategoryEditModal
+        onSave={(name, color) => {
+          const duplicate = categoryNames.some(
+            c => c.toLowerCase() === name.toLowerCase()
+          );
+          if (duplicate) {
+            alert(`A category called "${name}" already exists.`);
+            return;
+          }
+          addCategory(name, color);
+        }}
+        onClose={() => setShowAddCategory(false)}
+      />
+    )}
       {editingTask && (
         <TaskModal
           task={editingTask}
           existingCategories={categoryNames}
           onSave={async (data, id) => {
             const updates = data as Partial<Task>;
-            if (updates.category && !categoryNames.includes(updates.category)) {
+            if (updates.category && !categoryNames.some(c => c.toLowerCase() === updates.category!.toLowerCase())) {
               await addCategory(updates.category, 'Gray');
             }
             await updateTask(id!, updates);

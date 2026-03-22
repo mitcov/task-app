@@ -137,7 +137,6 @@ export function useTasks() {
   return {
     tasks,
     loading,
-    initialLoad,
     error,
     categories: groupedCategories(),
     rawCategories: categories,
