@@ -24,8 +24,7 @@ export function useTasks() {
     }
   }, []);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
-
+useEffect(() => { fetchAll(); }, []);
   const groupedCategories = useCallback((): Category[] => {
     const taskMap: Record<string, Task[]> = {};
     tasks.forEach(task => {
