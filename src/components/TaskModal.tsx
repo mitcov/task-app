@@ -14,7 +14,9 @@ export function TaskModal({ task, existingCategories, onSave, onDelete, onClose 
 
   const [title, setTitle] = useState(task?.title || '');
   const [category, setCategory] = useState(task?.category || existingCategories[0] || '');
-  const [newCategory, setNewCategory] = useState('');
+  const [newCategory, setNewCategory] = useState<string | null>(
+    existingCategories.length === 0 ? '' : null
+  );
   const [priority, setPriority] = useState<Priority>(task?.priority || '🟡 Medium');
   const [recurrence, setRecurrence] = useState<Recurrence>(task?.recurrence || 'None');
   const [recurrenceDay, setRecurrenceDay] = useState<RecurrenceDay>(task?.recurrenceDay || 'Sunday');
@@ -22,8 +24,10 @@ export function TaskModal({ task, existingCategories, onSave, onDelete, onClose 
   const [notes, setNotes] = useState(task?.notes || '');
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-const finalCategory = newCategory && newCategory !== '__new__' ? newCategory.trim() : category;
-
+const finalCategory = (newCategory !== null && newCategory.trim()) 
+  ? newCategory.trim() 
+  : category;
+  
   const handleSave = () => {
     if (!title.trim() || !finalCategory) return;
     const data = {
@@ -63,32 +67,35 @@ const finalCategory = newCategory && newCategory !== '__new__' ? newCategory.tri
           {/* Category */}
           <div>
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Category</label>
-            <select
-              value={newCategory ? '__new__' : category}
-              onChange={e => {
-                if (e.target.value === '__new__') {
-                  setNewCategory('__new__');
-                } else {
-                  setCategory(e.target.value);
-                  setNewCategory('');
-                }
-              }}
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-            >
-              {existingCategories.map(c => <option key={c} value={c}>{c}</option>)}
-              <option value="__new__">+ New category...</option>
-            </select>
-            {newCategory !== '' && (
-            <input
-                autoFocus
+            {existingCategories.length > 0 && (
+              <select
+                value={newCategory ? '__new__' : category}
+                onChange={e => {
+                  if (e.target.value === '__new__') {
+                    setNewCategory('');
+                  } else {
+                    setCategory(e.target.value);
+                    setNewCategory('');
+                  }
+                }}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+              >
+                {existingCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                <option value="__new__">+ New category...</option>
+              </select>
+            )}
+            {(newCategory !== null || existingCategories.length === 0) && (
+              <input
+                autoFocus={existingCategories.length === 0}
                 type="text"
                 placeholder="New category name"
                 value={newCategory}
                 onChange={e => setNewCategory(e.target.value)}
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                className={`w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 ${existingCategories.length > 0 ? 'mt-2' : ''}`}
               />
             )}
           </div>
+
 
           {/* Priority */}
           <div>
