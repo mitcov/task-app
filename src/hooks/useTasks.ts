@@ -17,8 +17,8 @@ export function useTasks() {
       ]);
       setTasks(tasksData);
       setCategories(catsData);
-    } catch (e) {
-      setError('Failed to load tasks');
+    } catch (e: any) {
+      setError(`Failed to load tasks: ${e?.message || JSON.stringify(e)}`);
     } finally {
       setLoading(false);
     }
