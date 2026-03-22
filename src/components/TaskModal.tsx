@@ -89,7 +89,7 @@ const finalCategory = (newCategory !== null && newCategory.trim())
                 autoFocus={existingCategories.length === 0}
                 type="text"
                 placeholder="New category name"
-                value={newCategory}
+                value={newCategory ?? ''}
                 onChange={e => setNewCategory(e.target.value)}
                 className={`w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 ${existingCategories.length > 0 ? 'mt-2' : ''}`}
               />
