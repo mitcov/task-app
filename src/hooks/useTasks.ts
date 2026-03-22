@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { Task, Category } from '../types';
 import { api } from '../lib/notion';
 
@@ -6,17 +6,19 @@ export function useTasks() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [categories, setCategories] = useState<Omit<Category, 'tasks'>[]>([]);
   const [loading, setLoading] = useState(true);
+  const initialLoad = useRef(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchAll = useCallback(async () => {
     try {
-      setLoading(true);
+      if (initialLoad.current) setLoading(true);
       const [tasksData, catsData] = await Promise.all([
         api.getTasks(),
         api.getCategories(),
       ]);
       setTasks(tasksData);
       setCategories(catsData);
+      initialLoad.current = false;
     } catch (e: any) {
       setError(`Failed to load tasks: ${e?.message || JSON.stringify(e)}`);
     } finally {
@@ -135,6 +137,7 @@ export function useTasks() {
   return {
     tasks,
     loading,
+    initialLoad,
     error,
     categories: groupedCategories(),
     rawCategories: categories,

@@ -14,7 +14,7 @@ type Tab = 'today' | 'all';
 function App() {
   const { user, selectUser, signOut } = useUser();
   const {
-    tasks, categories, loading, error,
+    tasks, categories, loading, initialLoad, error,
     completeTask, addTask, updateTask, deleteTask, reorderTasks,
     addCategory, updateCategory, deleteCategory, reorderCategories, refetch,
   } = useTasks();
@@ -34,7 +34,7 @@ function App() {
 
   if (!user) return <ProfileScreen onSelect={selectUser} />;
 
-  if (loading) return (
+  if (loading && initialLoad) return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
 
       <div className="text-center">
@@ -107,7 +107,14 @@ function App() {
       {showAdd && (
         <TaskModal
           existingCategories={categoryNames}
-          onSave={(data) => addTask(data as Omit<Task, 'id'>)}
+          onSave={async (data) => {
+            const taskData = data as Omit<Task, 'id'>;
+            // If this is a new category not already in our list, save it
+            if (taskData.category && !categoryNames.includes(taskData.category)) {
+              await addCategory(taskData.category, 'Gray');
+            }
+            await addTask(taskData);
+          }}
           onClose={() => setShowAdd(false)}
         />
       )}
@@ -121,7 +128,13 @@ function App() {
         <TaskModal
           task={editingTask}
           existingCategories={categoryNames}
-          onSave={(data, id) => updateTask(id!, data as Partial<Task>)}
+          onSave={async (data, id) => {
+            const updates = data as Partial<Task>;
+            if (updates.category && !categoryNames.includes(updates.category)) {
+              await addCategory(updates.category, 'Gray');
+            }
+            await updateTask(id!, updates);
+          }}
           onDelete={deleteTask}
           onClose={() => setEditingTask(null)}
         />
