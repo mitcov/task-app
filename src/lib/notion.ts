@@ -3,14 +3,17 @@ import { Task, Category } from '../types';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
 
+let currentUserId = 'mitchell';
+export const setCurrentUser = (id: string) => { currentUserId = id; };
+
 export const api = {
   // Tasks
   getTasks: async (): Promise<Task[]> => {
-    const { data } = await axios.get(`${API_BASE}/tasks`);
+    const { data } = await axios.get(`${API_BASE}/tasks`, { params: { userId: currentUserId } });
     return data;
   },
   addTask: async (task: Omit<Task, 'id'>): Promise<Task> => {
-    const { data } = await axios.post(`${API_BASE}/tasks`, task);
+    const { data } = await axios.post(`${API_BASE}/tasks`, { ...task, userId: currentUserId });
     return data;
   },
   updateTask: async (id: string, updates: Partial<Task>): Promise<Task> => {
@@ -26,11 +29,11 @@ export const api = {
 
   // Categories
   getCategories: async (): Promise<Omit<Category, 'tasks'>[]> => {
-    const { data } = await axios.get(`${API_BASE}/categories`);
+    const { data } = await axios.get(`${API_BASE}/categories`, { params: { userId: currentUserId } });
     return data;
   },
   addCategory: async (cat: { name: string; color: string; sortOrder: number }): Promise<Omit<Category, 'tasks'>> => {
-    const { data } = await axios.post(`${API_BASE}/categories`, cat);
+    const { data } = await axios.post(`${API_BASE}/categories`, { ...cat, userId: currentUserId });
     return data;
   },
   updateCategory: async (id: string, updates: Partial<Category>): Promise<Omit<Category, 'tasks'>> => {

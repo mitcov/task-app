@@ -27,6 +27,7 @@ function pageToTask(page) {
     sortOrder: p['Sort Order']?.number ?? 999,
     lastCompleted: p['Last Completed']?.date?.start || null,
     notes: p.Notes?.rich_text?.[0]?.plain_text || '',
+    userId: p.User?.rich_text?.[0]?.plain_text || '',
   };
 }
 
@@ -56,6 +57,8 @@ function taskToProperties(task) {
       : { date: null };
   if (task.notes !== undefined)
     props.Notes = { rich_text: [{ text: { content: task.notes } }] };
+  if (task.userId !== undefined)
+    props.User = { rich_text: [{ text: { content: task.userId } }] };
   return props;
 }
 
@@ -68,6 +71,7 @@ function pageToCategory(page) {
     name: p.Name?.title?.[0]?.plain_text || '',
     sortOrder: p['Sort Order']?.number ?? 999,
     color: p.Color?.select?.name || 'Gray',
+    userId: p.User?.rich_text?.[0]?.plain_text || '',
   };
 }
 
@@ -79,6 +83,8 @@ function categoryToProperties(cat) {
     props['Sort Order'] = { number: cat.sortOrder };
   if (cat.color !== undefined)
     props.Color = { select: { name: cat.color } };
+  if (cat.userId !== undefined)
+    props.User = { rich_text: [{ text: { content: cat.userId } }] };
   return props;
 }
 
@@ -86,8 +92,15 @@ function categoryToProperties(cat) {
 
 app.get('/tasks', async (req, res) => {
   try {
+    const { userId } = req.query;
+    const filter = userId ? {
+      property: 'User',
+      rich_text: { equals: userId }
+    } : undefined;
+
     const response = await notion.databases.query({
       database_id: DB_ID,
+      filter,
       sorts: [{ property: 'Sort Order', direction: 'ascending' }],
     });
     res.json(response.results.map(pageToTask));
@@ -125,10 +138,7 @@ app.patch('/tasks/:id', async (req, res) => {
 
 app.delete('/tasks/:id', async (req, res) => {
   try {
-    await notion.pages.update({
-      page_id: req.params.id,
-      archived: true,
-    });
+    await notion.pages.update({ page_id: req.params.id, archived: true });
     res.status(204).end();
   } catch (e) {
     console.error(e);
@@ -158,8 +168,15 @@ app.post('/tasks/reorder', async (req, res) => {
 
 app.get('/categories', async (req, res) => {
   try {
+    const { userId } = req.query;
+    const filter = userId ? {
+      property: 'User',
+      rich_text: { equals: userId }
+    } : undefined;
+
     const response = await notion.databases.query({
       database_id: CAT_DB_ID,
+      filter,
       sorts: [{ property: 'Sort Order', direction: 'ascending' }],
     });
     res.json(response.results.map(pageToCategory));
@@ -197,10 +214,7 @@ app.patch('/categories/:id', async (req, res) => {
 
 app.delete('/categories/:id', async (req, res) => {
   try {
-    await notion.pages.update({
-      page_id: req.params.id,
-      archived: true,
-    });
+    await notion.pages.update({ page_id: req.params.id, archived: true });
     res.status(204).end();
   } catch (e) {
     console.error(e);
