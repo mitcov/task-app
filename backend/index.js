@@ -6,11 +6,12 @@ const { Client } = require('@notionhq/client');
 const app = express();
 const notion = new Client({ auth: process.env.NOTION_TOKEN });
 const DB_ID = process.env.NOTION_DB_ID;
+const CAT_DB_ID = process.env.NOTION_CATEGORIES_DB_ID;
 
 app.use(cors({ origin: process.env.FRONTEND_URL || '*' }));
 app.use(express.json());
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Task Helpers ──────────────────────────────────────────────────────────────
 
 function pageToTask(page) {
   const p = page.properties;
@@ -58,9 +59,31 @@ function taskToProperties(task) {
   return props;
 }
 
-// ── Routes ───────────────────────────────────────────────────────────────────
+// ── Category Helpers ──────────────────────────────────────────────────────────
 
-// GET /tasks
+function pageToCategory(page) {
+  const p = page.properties;
+  return {
+    id: page.id,
+    name: p.Name?.title?.[0]?.plain_text || '',
+    sortOrder: p['Sort Order']?.number ?? 999,
+    color: p.Color?.select?.name || 'Gray',
+  };
+}
+
+function categoryToProperties(cat) {
+  const props = {};
+  if (cat.name !== undefined)
+    props.Name = { title: [{ text: { content: cat.name } }] };
+  if (cat.sortOrder !== undefined)
+    props['Sort Order'] = { number: cat.sortOrder };
+  if (cat.color !== undefined)
+    props.Color = { select: { name: cat.color } };
+  return props;
+}
+
+// ── Task Routes ───────────────────────────────────────────────────────────────
+
 app.get('/tasks', async (req, res) => {
   try {
     const response = await notion.databases.query({
@@ -74,7 +97,6 @@ app.get('/tasks', async (req, res) => {
   }
 });
 
-// POST /tasks
 app.post('/tasks', async (req, res) => {
   try {
     const page = await notion.pages.create({
@@ -88,7 +110,6 @@ app.post('/tasks', async (req, res) => {
   }
 });
 
-// PATCH /tasks/:id
 app.patch('/tasks/:id', async (req, res) => {
   try {
     const page = await notion.pages.update({
@@ -102,7 +123,6 @@ app.patch('/tasks/:id', async (req, res) => {
   }
 });
 
-// DELETE /tasks/:id
 app.delete('/tasks/:id', async (req, res) => {
   try {
     await notion.pages.update({
@@ -116,12 +136,83 @@ app.delete('/tasks/:id', async (req, res) => {
   }
 });
 
-// POST /tasks/reorder
 app.post('/tasks/reorder', async (req, res) => {
   try {
     const { taskIds } = req.body;
     await Promise.all(
       taskIds.map((id, index) =>
+        notion.pages.update({
+          page_id: id,
+          properties: { 'Sort Order': { number: index } },
+        })
+      )
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Category Routes ───────────────────────────────────────────────────────────
+
+app.get('/categories', async (req, res) => {
+  try {
+    const response = await notion.databases.query({
+      database_id: CAT_DB_ID,
+      sorts: [{ property: 'Sort Order', direction: 'ascending' }],
+    });
+    res.json(response.results.map(pageToCategory));
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/categories', async (req, res) => {
+  try {
+    const page = await notion.pages.create({
+      parent: { database_id: CAT_DB_ID },
+      properties: categoryToProperties(req.body),
+    });
+    res.status(201).json(pageToCategory(page));
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.patch('/categories/:id', async (req, res) => {
+  try {
+    const page = await notion.pages.update({
+      page_id: req.params.id,
+      properties: categoryToProperties(req.body),
+    });
+    res.json(pageToCategory(page));
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/categories/:id', async (req, res) => {
+  try {
+    await notion.pages.update({
+      page_id: req.params.id,
+      archived: true,
+    });
+    res.status(204).end();
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/categories/reorder', async (req, res) => {
+  try {
+    const { categoryIds } = req.body;
+    await Promise.all(
+      categoryIds.map((id, index) =>
         notion.pages.update({
           page_id: id,
           properties: { 'Sort Order': { number: index } },

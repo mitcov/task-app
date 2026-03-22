@@ -1,30 +1,46 @@
 import axios from 'axios';
-import { Task } from '../types';
+import { Task, Category } from '../types';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
-console.log('API_BASE:', API_BASE);
 
 export const api = {
+  // Tasks
   getTasks: async (): Promise<Task[]> => {
     const { data } = await axios.get(`${API_BASE}/tasks`);
     return data;
   },
-
   addTask: async (task: Omit<Task, 'id'>): Promise<Task> => {
     const { data } = await axios.post(`${API_BASE}/tasks`, task);
     return data;
   },
-
   updateTask: async (id: string, updates: Partial<Task>): Promise<Task> => {
     const { data } = await axios.patch(`${API_BASE}/tasks/${id}`, updates);
     return data;
   },
-
   deleteTask: async (id: string): Promise<void> => {
     await axios.delete(`${API_BASE}/tasks/${id}`);
   },
+  reorderTasks: async (taskIds: string[]): Promise<void> => {
+    await axios.post(`${API_BASE}/tasks/reorder`, { taskIds });
+  },
 
-  reorderTasks: async (taskIds: string[], category: string): Promise<void> => {
-    await axios.post(`${API_BASE}/tasks/reorder`, { taskIds, category });
+  // Categories
+  getCategories: async (): Promise<Omit<Category, 'tasks'>[]> => {
+    const { data } = await axios.get(`${API_BASE}/categories`);
+    return data;
+  },
+  addCategory: async (cat: { name: string; color: string; sortOrder: number }): Promise<Omit<Category, 'tasks'>> => {
+    const { data } = await axios.post(`${API_BASE}/categories`, cat);
+    return data;
+  },
+  updateCategory: async (id: string, updates: Partial<Category>): Promise<Omit<Category, 'tasks'>> => {
+    const { data } = await axios.patch(`${API_BASE}/categories/${id}`, updates);
+    return data;
+  },
+  deleteCategory: async (id: string): Promise<void> => {
+    await axios.delete(`${API_BASE}/categories/${id}`);
+  },
+  reorderCategories: async (categoryIds: string[]): Promise<void> => {
+    await axios.post(`${API_BASE}/categories/reorder`, { categoryIds });
   },
 };

@@ -4,14 +4,19 @@ import { api } from '../lib/notion';
 
 export function useTasks() {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [categories, setCategories] = useState<Omit<Category, 'tasks'>[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchTasks = useCallback(async () => {
+  const fetchAll = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await api.getTasks();
-      setTasks(data);
+      const [tasksData, catsData] = await Promise.all([
+        api.getTasks(),
+        api.getCategories(),
+      ]);
+      setTasks(tasksData);
+      setCategories(catsData);
     } catch (e) {
       setError('Failed to load tasks');
     } finally {
@@ -19,79 +24,131 @@ export function useTasks() {
     }
   }, []);
 
-  useEffect(() => { fetchTasks(); }, [fetchTasks]);
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  const groupByCategory = useCallback((): Category[] => {
-    const map: Record<string, Task[]> = {};
+  const groupedCategories = useCallback((): Category[] => {
+    const taskMap: Record<string, Task[]> = {};
     tasks.forEach(task => {
-      if (!map[task.category]) map[task.category] = [];
-      map[task.category].push(task);
+      if (!taskMap[task.category]) taskMap[task.category] = [];
+      taskMap[task.category].push(task);
     });
-    return Object.entries(map)
-      .map(([name, tasks]) => ({
-        id: name,
+
+    // Merge stored categories with any categories derived from tasks
+    const allCategoryNames = new Set([
+      ...categories.map(c => c.name),
+      ...tasks.map(t => t.category),
+    ]);
+
+    return Array.from(allCategoryNames).map(name => {
+      const stored = categories.find(c => c.name === name);
+      return {
+        id: stored?.id || name,
         name,
-        tasks: tasks.sort((a, b) => a.sortOrder - b.sortOrder),
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [tasks]);
+        sortOrder: stored?.sortOrder ?? 999,
+        color: stored?.color || 'Gray',
+        tasks: (taskMap[name] || []).sort((a, b) => a.sortOrder - b.sortOrder),
+      };
+    }).sort((a, b) => a.sortOrder - b.sortOrder);
+  }, [tasks, categories]);
 
   const completeTask = useCallback(async (id: string) => {
-    await api.updateTask(id, {
-      status: 'Done',
-      lastCompleted: new Date().toISOString(),
-    });
-    await fetchTasks();
-  }, [fetchTasks]);
+    await api.updateTask(id, { status: 'Done', lastCompleted: new Date().toISOString() });
+    await fetchAll();
+  }, [fetchAll]);
 
   const addTask = useCallback(async (task: Omit<Task, 'id'>) => {
     await api.addTask(task);
-    await fetchTasks();
-  }, [fetchTasks]);
+    await fetchAll();
+  }, [fetchAll]);
 
   const updateTask = useCallback(async (id: string, updates: Partial<Task>) => {
     await api.updateTask(id, updates);
-    await fetchTasks();
-  }, [fetchTasks]);
+    await fetchAll();
+  }, [fetchAll]);
 
   const deleteTask = useCallback(async (id: string) => {
     await api.deleteTask(id);
-    await fetchTasks();
-  }, [fetchTasks]);
+    await fetchAll();
+  }, [fetchAll]);
 
   const reorderTasks = useCallback(async (
-    category: string,
-    oldIndex: number,
-    newIndex: number
+    activeId: string,
+    overId: string,
+    activeCategory: string,
+    overCategory: string,
+    allCats: Category[]
   ) => {
-    const categoryTasks = tasks
-      .filter(t => t.category === category)
-      .sort((a, b) => a.sortOrder - b.sortOrder);
+    const activeCatTasks = [...(allCats.find(c => c.name === activeCategory)?.tasks || [])];
+    const overCatTasks = activeCategory === overCategory
+      ? activeCatTasks
+      : [...(allCats.find(c => c.name === overCategory)?.tasks || [])];
 
-    const reordered = [...categoryTasks];
+    if (activeCategory === overCategory) {
+      const oldIndex = activeCatTasks.findIndex(t => t.id === activeId);
+      const newIndex = activeCatTasks.findIndex(t => t.id === overId);
+      const reordered = [...activeCatTasks];
+      const [moved] = reordered.splice(oldIndex, 1);
+      reordered.splice(newIndex, 0, moved);
+      setTasks(prev => prev.map(t => {
+        const idx = reordered.findIndex(r => r.id === t.id);
+        return idx !== -1 ? { ...t, sortOrder: idx } : t;
+      }));
+      await api.reorderTasks(reordered.map(t => t.id));
+    } else {
+      // Moving to a different category
+      await api.updateTask(activeId, { category: overCategory });
+      const newOverTasks = [...overCatTasks];
+      const overIndex = newOverTasks.findIndex(t => t.id === overId);
+      newOverTasks.splice(overIndex >= 0 ? overIndex : newOverTasks.length, 0, { id: activeId } as Task);
+      setTasks(prev => prev.map(t =>
+        t.id === activeId ? { ...t, category: overCategory } : t
+      ));
+      await api.reorderTasks(newOverTasks.map(t => t.id));
+      await fetchAll();
+    }
+  }, [fetchAll]);
+
+  const addCategory = useCallback(async (name: string, color: string) => {
+    await api.addCategory({ name, color, sortOrder: categories.length });
+    await fetchAll();
+  }, [categories.length, fetchAll]);
+
+  const updateCategory = useCallback(async (id: string, updates: Partial<Category>) => {
+    await api.updateCategory(id, updates);
+    await fetchAll();
+  }, [fetchAll]);
+
+  const deleteCategory = useCallback(async (id: string, categoryName: string) => {
+    // Delete all tasks in this category first
+    const categoryTasks = tasks.filter(t => t.category === categoryName);
+    await Promise.all(categoryTasks.map(t => api.deleteTask(t.id)));
+    await api.deleteCategory(id);
+    await fetchAll();
+  }, [tasks, fetchAll]);
+
+  const reorderCategories = useCallback(async (oldIndex: number, newIndex: number, allCats: Category[]) => {
+    const reordered = [...allCats];
     const [moved] = reordered.splice(oldIndex, 1);
     reordered.splice(newIndex, 0, moved);
-
-    // Optimistic update
-    const updatedIds = reordered.map(t => t.id);
-    setTasks(prev => prev.map(t => {
-      const idx = updatedIds.indexOf(t.id);
-      return idx !== -1 ? { ...t, sortOrder: idx } : t;
-    }));
-
-    await api.reorderTasks(updatedIds, category);
-  }, [tasks]);
+    await api.reorderCategories(reordered.map(c => c.id));
+    await fetchAll();
+  }, [fetchAll]);
 
   return {
     tasks,
     loading,
     error,
-    categories: groupByCategory(),
+    categories: groupedCategories(),
+    rawCategories: categories,
     completeTask,
     addTask,
     updateTask,
     deleteTask,
     reorderTasks,
-    refetch: fetchTasks,
+    addCategory,
+    updateCategory,
+    deleteCategory,
+    reorderCategories,
+    refetch: fetchAll,
   };
 }

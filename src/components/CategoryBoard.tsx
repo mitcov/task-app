@@ -2,12 +2,15 @@ import React, { useState } from 'react';
 import {
   DndContext,
   closestCenter,
-  KeyboardSensor,
   PointerSensor,
   TouchSensor,
+  KeyboardSensor,
   useSensor,
   useSensors,
   DragEndEvent,
+  DragOverEvent,
+  DragOverlay,
+  Active,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -16,40 +19,39 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Category, Task } from '../types';
+import { Category, Task, CATEGORY_COLORS } from '../types';
 
 interface TaskCardProps {
   task: Task;
   onComplete: (id: string) => void;
-  onDelete: (id: string) => void;
+  onClick: (task: Task) => void;
+  overlay?: boolean;
 }
 
-function TaskCard({ task, onComplete, onDelete }: TaskCardProps) {
+export function TaskCard({ task, onComplete, onClick, overlay }: TaskCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: task.id });
+    useSortable({ id: task.id, data: { category: task.category } });
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 0.3 : 1,
   };
 
   return (
     <div
       ref={setNodeRef}
-      style={style}
+      style={overlay ? {} : style}
       className={`bg-white rounded-xl shadow-sm border border-gray-100 p-3 mb-2 flex items-center gap-3 touch-none
-        ${task.status === 'Done' ? 'opacity-50' : ''}`}
+        ${task.status === 'Done' ? 'opacity-50' : ''}
+        ${overlay ? 'shadow-lg rotate-1 scale-105' : ''}`}
     >
-      {/* Drag handle */}
       <div {...attributes} {...listeners}
-        className="text-gray-300 cursor-grab active:cursor-grabbing text-lg select-none px-1">
+        className="text-gray-300 cursor-grab active:cursor-grabbing text-lg select-none px-1 flex-shrink-0">
         ⠿
       </div>
-
-      {/* Checkbox */}
       <button
-        onClick={() => onComplete(task.id)}
+        onClick={(e) => { e.stopPropagation(); onComplete(task.id); }}
         className={`w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors
           ${task.status === 'Done'
             ? 'bg-green-400 border-green-400 text-white'
@@ -57,9 +59,7 @@ function TaskCard({ task, onComplete, onDelete }: TaskCardProps) {
       >
         {task.status === 'Done' && <span className="text-xs">✓</span>}
       </button>
-
-      {/* Task info */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0" onClick={() => onClick(task)}>
         <p className={`text-sm font-medium truncate ${task.status === 'Done' ? 'line-through text-gray-400' : 'text-gray-800'}`}>
           {task.title}
         </p>
@@ -75,12 +75,6 @@ function TaskCard({ task, onComplete, onDelete }: TaskCardProps) {
           )}
         </div>
       </div>
-
-      {/* Delete */}
-      <button onClick={() => onDelete(task.id)}
-        className="text-gray-200 hover:text-red-400 transition-colors text-lg flex-shrink-0">
-        ×
-      </button>
     </div>
   );
 }
@@ -88,65 +82,57 @@ function TaskCard({ task, onComplete, onDelete }: TaskCardProps) {
 interface CategoryColumnProps {
   category: Category;
   onComplete: (id: string) => void;
-  onDelete: (id: string) => void;
-  onDragEnd: (category: string, event: DragEndEvent) => void;
+  onTaskClick: (task: Task) => void;
+  onEditCategory: (cat: Category) => void;
+  isOver?: boolean;
 }
 
-function CategoryColumn({ category, onComplete, onDelete, onDragEnd }: CategoryColumnProps) {
+function CategoryColumn({ category, onComplete, onTaskClick, onEditCategory, isOver }: CategoryColumnProps) {
   const [collapsed, setCollapsed] = useState(false);
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(TouchSensor, {
-      activationConstraint: { delay: 150, tolerance: 5 },
-    }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
-
+  const colorClass = CATEGORY_COLORS[category.color] || CATEGORY_COLORS.Gray;
   const pending = category.tasks.filter(t => t.status !== 'Done').length;
 
   return (
-    <div className="bg-gray-50 rounded-2xl p-4 mb-4">
-      <button
-        onClick={() => setCollapsed(c => !c)}
-        className="w-full flex items-center justify-between mb-3"
-      >
-        <div className="flex items-center gap-2">
-          <h2 className="font-semibold text-gray-700 text-sm uppercase tracking-wide">
+    <div className={`rounded-2xl p-4 mb-4 transition-colors border-2
+      ${isOver ? 'border-blue-300 bg-blue-50' : 'border-transparent bg-gray-50'}`}>
+      <div className="flex items-center justify-between mb-3">
+        <button onClick={() => setCollapsed(c => !c)} className="flex items-center gap-2 flex-1">
+          <span className={`text-xs font-bold px-2 py-1 rounded-lg border ${colorClass}`}>
             {category.name}
-          </h2>
+          </span>
           {pending > 0 && (
             <span className="bg-blue-100 text-blue-600 text-xs font-semibold px-2 py-0.5 rounded-full">
               {pending}
             </span>
           )}
-        </div>
-        <span className="text-gray-400 text-sm">{collapsed ? '▸' : '▾'}</span>
-      </button>
+          <span className="text-gray-400 text-sm ml-1">{collapsed ? '▸' : '▾'}</span>
+        </button>
+        <button onClick={() => onEditCategory(category)}
+          className="text-gray-300 hover:text-gray-500 transition-colors text-sm px-2">
+          ✎
+        </button>
+      </div>
 
       {!collapsed && (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={(e) => onDragEnd(category.name, e)}
+        <SortableContext
+          items={category.tasks.map(t => t.id)}
+          strategy={verticalListSortingStrategy}
         >
-          <SortableContext
-            items={category.tasks.map(t => t.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            {category.tasks.map(task => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                onComplete={onComplete}
-                onDelete={onDelete}
-              />
-            ))}
-          </SortableContext>
-        </DndContext>
-      )}
-
-      {!collapsed && category.tasks.length === 0 && (
-        <p className="text-xs text-gray-400 text-center py-4">No tasks here yet</p>
+          {category.tasks.map(task => (
+            <TaskCard
+              key={task.id}
+              task={task}
+              onComplete={onComplete}
+              onClick={onTaskClick}
+            />
+          ))}
+          {category.tasks.length === 0 && (
+            <div className={`border-2 border-dashed rounded-xl p-4 text-center transition-colors
+              ${isOver ? 'border-blue-300' : 'border-gray-200'}`}>
+              <p className="text-xs text-gray-400">Drop tasks here</p>
+            </div>
+          )}
+        </SortableContext>
       )}
     </div>
   );
@@ -155,43 +141,93 @@ function CategoryColumn({ category, onComplete, onDelete, onDragEnd }: CategoryC
 interface CategoryBoardProps {
   categories: Category[];
   onComplete: (id: string) => void;
-  onDelete: (id: string) => void;
-  onReorder: (category: string, oldIndex: number, newIndex: number) => void;
+  onTaskClick: (task: Task) => void;
+  onEditCategory: (cat: Category) => void;
+  onReorder: (activeId: string, overId: string, activeCat: string, overCat: string, cats: Category[]) => void;
 }
 
-export function CategoryBoard({ categories, onComplete, onDelete, onReorder }: CategoryBoardProps) {
-  const handleDragEnd = (categoryName: string, event: DragEndEvent) => {
-    const { active, over } = event;
+export function CategoryBoard({ categories, onComplete, onTaskClick, onEditCategory, onReorder }: CategoryBoardProps) {
+  const [activeTask, setActiveTask] = useState<Task | null>(null);
+  const [overCategory, setOverCategory] = useState<string | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const findTaskCategory = (taskId: string) =>
+    categories.find(c => c.tasks.some(t => t.id === taskId))?.name || '';
+
+  const findCategoryFromOver = (over: Active | { id: string }) => {
+    // Is it a task id?
+    const taskCat = categories.find(c => c.tasks.some(t => t.id === over.id));
+    if (taskCat) return taskCat.name;
+    // Is it a category id?
+    const cat = categories.find(c => c.id === over.id);
+    if (cat) return cat.name;
+    return null;
+  };
+
+  const handleDragStart = ({ active }: { active: Active }) => {
+    const task = categories.flatMap(c => c.tasks).find(t => t.id === active.id);
+    if (task) setActiveTask(task);
+  };
+
+  const handleDragOver = ({ over }: DragOverEvent) => {
+    if (!over) { setOverCategory(null); return; }
+    const cat = findCategoryFromOver(over);
+    setOverCategory(cat);
+  };
+
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    setActiveTask(null);
+    setOverCategory(null);
     if (!over || active.id === over.id) return;
 
-    const category = categories.find(c => c.name === categoryName);
-    if (!category) return;
+    const activeCat = findTaskCategory(active.id as string);
+    const overCat = findCategoryFromOver(over) || activeCat;
 
-    const oldIndex = category.tasks.findIndex(t => t.id === active.id);
-    const newIndex = category.tasks.findIndex(t => t.id === over.id);
-    onReorder(categoryName, oldIndex, newIndex);
+    onReorder(active.id as string, over.id as string, activeCat, overCat, categories);
   };
 
   if (categories.length === 0) {
     return (
       <div className="text-center py-16 text-gray-400">
         <p className="text-4xl mb-3">📋</p>
-        <p className="text-sm">No tasks yet. Add one below!</p>
+        <p className="text-sm">No categories yet. Add one below!</p>
       </div>
     );
   }
 
   return (
-    <div>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragEnd={handleDragEnd}
+    >
       {categories.map(cat => (
         <CategoryColumn
           key={cat.id}
           category={cat}
           onComplete={onComplete}
-          onDelete={onDelete}
-          onDragEnd={handleDragEnd}
+          onTaskClick={onTaskClick}
+          onEditCategory={onEditCategory}
+          isOver={overCategory === cat.name}
         />
       ))}
-    </div>
+      <DragOverlay>
+        {activeTask && (
+          <TaskCard
+            task={activeTask}
+            onComplete={() => {}}
+            onClick={() => {}}
+            overlay
+          />
+        )}
+      </DragOverlay>
+    </DndContext>
   );
 }
