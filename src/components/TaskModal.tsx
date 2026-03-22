@@ -22,7 +22,7 @@ export function TaskModal({ task, existingCategories, onSave, onDelete, onClose 
   const [notes, setNotes] = useState(task?.notes || '');
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const finalCategory = newCategory.trim() || category;
+const finalCategory = newCategory && newCategory !== '__new__' ? newCategory.trim() : category;
 
   const handleSave = () => {
     if (!title.trim() || !finalCategory) return;
@@ -67,7 +67,7 @@ export function TaskModal({ task, existingCategories, onSave, onDelete, onClose 
               value={newCategory ? '__new__' : category}
               onChange={e => {
                 if (e.target.value === '__new__') {
-                  setNewCategory(' ');
+                  setNewCategory('__new__');
                 } else {
                   setCategory(e.target.value);
                   setNewCategory('');
@@ -79,11 +79,11 @@ export function TaskModal({ task, existingCategories, onSave, onDelete, onClose 
               <option value="__new__">+ New category...</option>
             </select>
             {newCategory !== '' && (
-              <input
+            <input
                 autoFocus
                 type="text"
                 placeholder="New category name"
-                value={newCategory.trim()}
+                value={newCategory}
                 onChange={e => setNewCategory(e.target.value)}
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-blue-300"
               />
