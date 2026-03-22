@@ -30,7 +30,7 @@ function App() {
       setCurrentUser(user.id);
       refetch();
     }
-  }, [user]);
+  }, [user, refetch]);
 
   if (!user) return <ProfileScreen onSelect={selectUser} />;
 
