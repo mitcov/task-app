@@ -37,8 +37,8 @@ function App() {
   if (loading) return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <div className="text-center">
-        <div className="text-4xl mb-3 animate-pulse">📋</div>
-        <p className="text-gray-400 text-sm">Loading tasks...</p>
+        <div className="text-4xl mb-3 animate-pulse">✓</div>
+        <p className="text-gray-400 text-sm">Just Do It...</p>
       </div>
     </div>
   );
@@ -58,7 +58,7 @@ function App() {
         <div className="flex items-center justify-between mb-4">
           <button onClick={signOut} className="flex items-center gap-2 active:opacity-70 transition-opacity">
             <span className="text-2xl">{user.emoji}</span>
-            <h1 className="text-xl font-bold text-gray-900">{user.name}'s Tasks</h1>
+            <h1 className="text-xl font-bold text-gray-900">Just Do It</h1>
           </button>
           <div className="flex gap-2 items-center">
             {tab === 'all' && (

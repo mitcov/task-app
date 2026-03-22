@@ -57,7 +57,7 @@ export function ProfileScreen({ onSelect }: Props) {
       {/* App title */}
       <div className="text-center mb-12">
         <div className="text-5xl mb-4">📋</div>
-        <h1 className="text-3xl font-bold text-gray-900">My Tasks</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Just Do It</h1>
         <p className="text-gray-400 mt-2 text-sm">Who's checking in?</p>
       </div>
 
