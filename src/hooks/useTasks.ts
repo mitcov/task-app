@@ -24,9 +24,6 @@ export function useTasks() {
     }
   }, []); // stable — no dependencies needed since api functions don't change
 
-useEffect(() => {
-  fetchAll();
-}, [fetchAll]);
   const groupedCategories = useCallback((): Category[] => {
     const taskMap: Record<string, Task[]> = {};
     tasks.forEach(task => {

@@ -30,7 +30,6 @@ function App() {
       setCurrentUser(user.id);
       refetch();
     }
-    // refetch is stable via useCallback in useTasks
   }, [user, refetch]);
 
   if (!user) return <ProfileScreen onSelect={selectUser} />;

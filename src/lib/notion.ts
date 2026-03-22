@@ -3,7 +3,7 @@ import { Task, Category } from '../types';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
 
-let currentUserId = 'mitchell';
+let currentUserId = '';
 export const setCurrentUser = (id: string) => { currentUserId = id; };
 
 export const api = {
