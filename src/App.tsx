@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { useTasks } from './hooks/useTasks';
 import { CategoryBoard } from './components/CategoryBoard';
-import { AddTaskModal } from './components/AddTaskModal';
-import { TaskEditModal } from './components/TaskEditModal';
+import { TaskModal } from './components/TaskModal';
 import { CategoryEditModal } from './components/CategoryEditModal';
 import { TodayView } from './components/TodayView';
 import { Task, Category } from './types';
@@ -87,9 +86,9 @@ function App() {
 
       {/* Modals */}
       {showAdd && (
-        <AddTaskModal
+        <TaskModal
           existingCategories={categoryNames}
-          onAdd={addTask}
+          onSave={(data) => addTask(data as Omit<Task, 'id'>)}
           onClose={() => setShowAdd(false)}
         />
       )}
@@ -102,10 +101,10 @@ function App() {
       )}
 
       {editingTask && (
-        <TaskEditModal
+        <TaskModal
           task={editingTask}
-          categories={categoryNames}
-          onSave={updateTask}
+          existingCategories={categoryNames}
+          onSave={(data, id) => updateTask(id!, data as Partial<Task>)}
           onDelete={deleteTask}
           onClose={() => setEditingTask(null)}
         />
