@@ -84,7 +84,7 @@ export function TaskModal({ task, existingCategories, onSave, onDelete, onClose 
         <div className="space-y-4">
           {/* Title */}
           <input
-            autoFocus
+            autoFocus={!isEdit}
             type="text"
             placeholder="Task name"
             value={title}
@@ -197,9 +197,10 @@ export function TaskModal({ task, existingCategories, onSave, onDelete, onClose 
                   <button
                     onClick={() => addReminder('once')}
                     disabled={!dueDate}
-                    className="text-xs text-blue-500 font-semibold disabled:text-gray-300 dark:disabled:text-gray-600"
+                    className={`text-xs font-semibold transition-colors ${dueDate ? 'text-blue-500' : 'text-gray-300 dark:text-gray-600 cursor-not-allowed'}`}
+                    title={!dueDate ? 'Set a due date first' : ''}
                   >
-                    + One-time
+                    + One-time {!dueDate && '(needs due date)'}
                   </button>
                   <button
                     onClick={() => addReminder('daily')}

@@ -44,7 +44,7 @@ export function TaskCard({ task, onComplete, onClick, overlay }: TaskCardProps) 
     <div
       ref={setNodeRef}
       style={overlay ? {} : style}
-      className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-3 mb-2 flex items-center gap-3 touch-none
+      className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-3 mb-2 flex items-center gap-3 
         ${task.status === 'Done' ? 'opacity-50' : ''}
         ${overlay ? 'shadow-lg rotate-1 scale-105' : ''}`}
     >
@@ -116,7 +116,7 @@ function CategoryColumn({ category, onComplete, onTaskClick, onEditCategory, isO
     <div
       ref={setNodeRef}
       style={style}
-      className={`rounded-2xl p-4 mb-4 transition-colors border-2 touch-none
+      className={`rounded-2xl p-4 mb-4 transition-colors border-2
         ${isOver && !isDraggingCategory ? 'border-blue-300 bg-blue-50 dark:bg-blue-950' : 'border-transparent bg-gray-50 dark:bg-gray-900'}
         ${isDragging ? 'shadow-xl' : ''}`}
     >
@@ -126,7 +126,7 @@ function CategoryColumn({ category, onComplete, onTaskClick, onEditCategory, isO
           className="text-gray-400 dark:text-gray-500 cursor-grab active:cursor-grabbing select-none px-2 py-2 flex-shrink-0 touch-none">
           ⣿
         </div>
-        
+
         <button onClick={() => setCollapsed(c => !c)} className="flex items-center gap-2 flex-1">
           <span className={`text-xs font-bold px-2 py-1 rounded-lg border ${colorClass}`}>
             {category.name}
