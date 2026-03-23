@@ -176,12 +176,14 @@ export function TaskModal({ task, existingCategories, onSave, onDelete, onClose 
             <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1 block">
               Due Date (optional)
             </label>
-            <input
-              type="date"
-              value={dueDate}
-              onChange={e => setDueDate(e.target.value)}
-              className="w-full border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-            />
+            <div className="overflow-hidden rounded-xl">
+              <input
+                type="date"
+                value={dueDate}
+                onChange={e => setDueDate(e.target.value)}
+                className="w-full border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+              />
+            </div>
           </div>
 
           {/* Reminders */}
@@ -221,12 +223,14 @@ export function TaskModal({ task, existingCategories, onSave, onDelete, onClose 
                 <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">
                   Time on due date
                 </label>
-                <input
-                  type="time"
-                  value={reminderTime}
-                  onChange={e => setReminderTime(e.target.value)}
-                  className="w-full border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-                />
+                <div className="overflow-hidden rounded-xl">
+                  <input
+                    type="time"
+                    value={reminderTime}
+                    onChange={e => setReminderTime(e.target.value)}
+                    className="w-full border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  />
+                </div>
               </div>
             )}
 
@@ -264,26 +268,31 @@ export function TaskModal({ task, existingCategories, onSave, onDelete, onClose 
                     ))}
                   </select>
                 ) : (
-                  <div className="flex gap-2">
-                    <div className="flex-1">
+                  <div className="space-y-2">
+                    <div>
                       <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">Time</label>
-                      <input
-                        type="time"
-                        value={reminder.dailyTime || '09:00'}
-                        onChange={e => updateReminder(index, { dailyTime: e.target.value })}
-                        className="w-full border border-purple-200 dark:border-purple-800 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
-                      />
+                      <div className="overflow-hidden rounded-lg">
+                        <input
+                          type="time"
+                          value={reminder.dailyTime || '09:00'}
+                          onChange={e => updateReminder(index, { dailyTime: e.target.value })}
+                          className="w-full border border-purple-200 dark:border-purple-800 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
+                        />
+                      </div>
                     </div>
-                    <div className="flex-1">
+                    <div>
                       <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">Start date</label>
-                      <input
-                        type="date"
-                        value={reminder.dailyStart || ''}
-                        onChange={e => updateReminder(index, { dailyStart: e.target.value })}
-                        className="w-full border border-purple-200 dark:border-purple-800 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
-                      />
+                      <div className="overflow-hidden rounded-lg">
+                        <input
+                          type="date"
+                          value={reminder.dailyStart || ''}
+                          onChange={e => updateReminder(index, { dailyStart: e.target.value })}
+                          className="w-full border border-purple-200 dark:border-purple-800 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
+                        />
+                      </div>
                     </div>
                   </div>
+
                 )}
               </div>
             ))}

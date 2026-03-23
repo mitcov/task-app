@@ -49,8 +49,8 @@ export function TaskCard({ task, onComplete, onClick, overlay }: TaskCardProps) 
         ${overlay ? 'shadow-lg rotate-1 scale-105' : ''}`}
     >
       <div {...attributes} {...listeners}
-        className="text-gray-300 cursor-grab active:cursor-grabbing text-lg select-none px-1 flex-shrink-0">
-        ⠿
+        className="text-gray-400 dark:text-gray-500 cursor-grab active:cursor-grabbing select-none px-2 py-2 flex-shrink-0 touch-none">
+        ⣿
       </div>
       <button
         onClick={(e) => { e.stopPropagation(); onComplete(task.id); }}
@@ -123,10 +123,10 @@ function CategoryColumn({ category, onComplete, onTaskClick, onEditCategory, isO
       <div className="flex items-center justify-between mb-3">
         {/* Category drag handle */}
         <div {...catAttributes} {...catListeners}
-          className="text-gray-300 cursor-grab active:cursor-grabbing text-lg select-none pr-2 flex-shrink-0">
-          ⠿
+          className="text-gray-400 dark:text-gray-500 cursor-grab active:cursor-grabbing select-none px-2 py-2 flex-shrink-0 touch-none">
+          ⣿
         </div>
-
+        
         <button onClick={() => setCollapsed(c => !c)} className="flex items-center gap-2 flex-1">
           <span className={`text-xs font-bold px-2 py-1 rounded-lg border ${colorClass}`}>
             {category.name}
@@ -190,7 +190,7 @@ export function CategoryBoard({
 
   const sensors = useSensors(
     useSensor(PointerSensor),
-    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
