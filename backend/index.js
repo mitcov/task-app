@@ -14,8 +14,8 @@ app.use(express.json());
 // ── VAPID Setup ───────────────────────────────────────────────────────────────
 webpush.setVapidDetails(
   'mailto:' + (process.env.VAPID_EMAIL || 'admin@justdoit.app'),
-  process.env.VAPID_PUBLIC_KEY || '',
-  process.env.VAPID_PRIVATE_KEY || ''
+  process.env.VAPID_PUBLIC_KEY,
+  process.env.VAPID_PRIVATE_KEY
 );
 
 // ── DB Init ───────────────────────────────────────────────────────────────────
@@ -41,8 +41,11 @@ async function initDB() {
     CREATE TABLE IF NOT EXISTS reminders (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
-      offset_minutes INTEGER NOT NULL,
-      label TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'once',
+      offset_minutes INTEGER,
+      label TEXT,
+      daily_time TIME,
+      daily_start DATE,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
 
@@ -63,10 +66,29 @@ async function initDB() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
   `);
+
+  // Add new columns if they don't exist yet (safe to run multiple times)
+  await pool.query(`
+    ALTER TABLE reminders ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT 'once';
+    ALTER TABLE reminders ADD COLUMN IF NOT EXISTS daily_time TIME;
+    ALTER TABLE reminders ADD COLUMN IF NOT EXISTS daily_start DATE;
+  `);
+
   console.log('DB initialized');
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+function rowToReminder(r) {
+  return {
+    id: r.id,
+    type: r.type || 'once',
+    offsetMinutes: r.offset_minutes,
+    label: r.label,
+    dailyTime: r.daily_time || null,
+    dailyStart: r.daily_start ? r.daily_start.toISOString().split('T')[0] : null,
+  };
+}
 
 function rowToTask(row, reminders = []) {
   return {
@@ -83,11 +105,7 @@ function rowToTask(row, reminders = []) {
     sortOrder: row.sort_order,
     lastCompleted: row.last_completed,
     notes: row.notes,
-    reminders: reminders.map(r => ({
-      id: r.id,
-      offsetMinutes: r.offset_minutes,
-      label: r.label,
-    })),
+    reminders: reminders.map(rowToReminder),
   };
 }
 
@@ -101,6 +119,27 @@ function rowToCategory(row) {
   };
 }
 
+async function saveReminders(taskId, reminders) {
+  await pool.query('DELETE FROM reminders WHERE task_id = $1', [taskId]);
+  const saved = [];
+  for (const r of reminders) {
+    const result = await pool.query(
+      `INSERT INTO reminders (task_id, type, offset_minutes, label, daily_time, daily_start)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [
+        taskId,
+        r.type || 'once',
+        r.type === 'once' ? r.offsetMinutes : null,
+        r.type === 'once' ? r.label : null,
+        r.type === 'daily' ? r.dailyTime : null,
+        r.type === 'daily' ? r.dailyStart : null,
+      ]
+    );
+    saved.push(result.rows[0]);
+  }
+  return saved;
+}
+
 // ── Task Routes ───────────────────────────────────────────────────────────────
 
 app.get('/tasks', async (req, res) => {
@@ -110,10 +149,11 @@ app.get('/tasks', async (req, res) => {
       'SELECT * FROM tasks WHERE user_id = $1 ORDER BY sort_order ASC, created_at ASC',
       [userId]
     );
-    const reminders = await pool.query(
-      'SELECT * FROM reminders WHERE task_id = ANY($1)',
-      [tasks.rows.map(t => t.id)]
-    );
+    const taskIds = tasks.rows.map(t => t.id);
+    const reminders = taskIds.length > 0
+      ? await pool.query('SELECT * FROM reminders WHERE task_id = ANY($1)', [taskIds])
+      : { rows: [] };
+
     const reminderMap = {};
     reminders.rows.forEach(r => {
       if (!reminderMap[r.task_id]) reminderMap[r.task_id] = [];
@@ -134,7 +174,8 @@ app.post('/tasks', async (req, res) => {
     } = req.body;
 
     const result = await pool.query(
-      `INSERT INTO tasks (user_id, title, category, status, priority, recurrence, recurrence_day, due_date, reminder_time, sort_order, notes)
+      `INSERT INTO tasks (user_id, title, category, status, priority, recurrence,
+        recurrence_day, due_date, reminder_time, sort_order, notes)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
       [userId, title, category, status || 'To Do', priority || '🟡 Medium',
        recurrence || 'None', recurrenceDay || null, dueDate || null,
@@ -142,17 +183,9 @@ app.post('/tasks', async (req, res) => {
     );
 
     const task = result.rows[0];
-    let savedReminders = [];
-
-    if (reminders && reminders.length > 0) {
-      for (const r of reminders) {
-        const rr = await pool.query(
-          'INSERT INTO reminders (task_id, offset_minutes, label) VALUES ($1,$2,$3) RETURNING *',
-          [task.id, r.offsetMinutes, r.label]
-        );
-        savedReminders.push(rr.rows[0]);
-      }
-    }
+    const savedReminders = reminders?.length > 0
+      ? await saveReminders(task.id, reminders)
+      : [];
 
     res.status(201).json(rowToTask(task, savedReminders));
   } catch (e) {
@@ -178,10 +211,10 @@ app.patch('/tasks/:id', async (req, res) => {
         priority = COALESCE($4, priority),
         recurrence = COALESCE($5, recurrence),
         recurrence_day = COALESCE($6, recurrence_day),
-        due_date = COALESCE($7, due_date),
-        reminder_time = COALESCE($8, reminder_time),
+        due_date = COALESCE($7::date, due_date),
+        reminder_time = COALESCE($8::time, reminder_time),
         sort_order = COALESCE($9, sort_order),
-        last_completed = COALESCE($10, last_completed),
+        last_completed = COALESCE($10::timestamptz, last_completed),
         notes = COALESCE($11, notes)
        WHERE id = $12 RETURNING *`,
       [title, category, status, priority, recurrence, recurrenceDay,
@@ -189,21 +222,9 @@ app.patch('/tasks/:id', async (req, res) => {
        lastCompleted || null, notes, id]
     );
 
-    // Update reminders if provided
-    let savedReminders = [];
-    if (reminders !== undefined) {
-      await pool.query('DELETE FROM reminders WHERE task_id = $1', [id]);
-      for (const r of reminders) {
-        const rr = await pool.query(
-          'INSERT INTO reminders (task_id, offset_minutes, label) VALUES ($1,$2,$3) RETURNING *',
-          [id, r.offsetMinutes, r.label]
-        );
-        savedReminders.push(rr.rows[0]);
-      }
-    } else {
-      const existing = await pool.query('SELECT * FROM reminders WHERE task_id = $1', [id]);
-      savedReminders = existing.rows;
-    }
+    const savedReminders = reminders !== undefined
+      ? await saveReminders(id, reminders)
+      : (await pool.query('SELECT * FROM reminders WHERE task_id = $1', [id])).rows;
 
     res.json(rowToTask(result.rows[0], savedReminders));
   } catch (e) {
@@ -320,8 +341,7 @@ app.post('/subscribe', async (req, res) => {
     const { userId, subscription } = req.body;
     await pool.query(
       `INSERT INTO push_subscriptions (user_id, subscription)
-       VALUES ($1, $2)
-       ON CONFLICT DO NOTHING`,
+       VALUES ($1, $2)`,
       [userId, JSON.stringify(subscription)]
     );
     res.status(201).json({ ok: true });
@@ -348,57 +368,85 @@ app.get('/vapid-public-key', (req, res) => {
 
 // ── Reminder Cron ─────────────────────────────────────────────────────────────
 
+async function sendPushToUser(userId, title, body) {
+  const subs = await pool.query(
+    'SELECT subscription FROM push_subscriptions WHERE user_id = $1',
+    [userId]
+  );
+  for (const sub of subs.rows) {
+    try {
+      await webpush.sendNotification(
+        sub.subscription,
+        JSON.stringify({ title, body, icon: '/icon.svg' })
+      );
+    } catch (e) {
+      console.error('Push failed:', e.message);
+      if (e.statusCode === 410) {
+        await pool.query(
+          'DELETE FROM push_subscriptions WHERE subscription = $1',
+          [JSON.stringify(sub.subscription)]
+        );
+      }
+    }
+  }
+}
+
 cron.schedule('*/5 * * * *', async () => {
   try {
     const now = new Date();
-    const tasks = await pool.query(`
-      SELECT t.*, r.id as reminder_id, r.offset_minutes, r.label
+    const todayStr = now.toISOString().split('T')[0];
+
+    // ── One-time reminders ──
+    const onceReminders = await pool.query(`
+      SELECT t.id as task_id, t.user_id, t.title, t.due_date, t.reminder_time,
+             r.id as reminder_id, r.offset_minutes, r.label
       FROM tasks t
       JOIN reminders r ON r.task_id = t.id
-      WHERE t.due_date IS NOT NULL
-      AND t.reminder_time IS NOT NULL
+      WHERE r.type = 'once'
       AND t.status != 'Done'
+      AND t.due_date IS NOT NULL
+      AND t.reminder_time IS NOT NULL
     `);
 
-    for (const task of tasks.rows) {
-      // Build the exact datetime for this task's reminder
-      const dueDate = task.due_date.toISOString().split('T')[0];
-      const reminderTime = task.reminder_time; // e.g. "09:00:00"
-      const [hours, minutes] = reminderTime.split(':').map(Number);
-
+    for (const row of onceReminders.rows) {
+      const dueDate = row.due_date.toISOString().split('T')[0];
+      const [hours, minutes] = row.reminder_time.split(':').map(Number);
       const taskDateTime = new Date(`${dueDate}T${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:00`);
-      const reminderDateTime = new Date(taskDateTime.getTime() - task.offset_minutes * 60000);
-
-      // Check if this reminder should fire in the next 5 minutes
+      const reminderDateTime = new Date(taskDateTime.getTime() - row.offset_minutes * 60000);
       const diff = reminderDateTime.getTime() - now.getTime();
-      if (diff >= 0 && diff < 5 * 60 * 1000) {
-        // Get push subscriptions for this user
-        const subs = await pool.query(
-          'SELECT subscription FROM push_subscriptions WHERE user_id = $1',
-          [task.user_id]
-        );
 
-        for (const sub of subs.rows) {
-          try {
-            await webpush.sendNotification(
-              sub.subscription,
-              JSON.stringify({
-                title: 'Just Do It',
-                body: `${task.label}: ${task.title}`,
-                icon: '/icon.svg',
-              })
-            );
-          } catch (e) {
-            console.error('Push failed:', e.message);
-            // Remove invalid subscriptions
-            if (e.statusCode === 410) {
-              await pool.query(
-                'DELETE FROM push_subscriptions WHERE subscription = $1',
-                [JSON.stringify(sub.subscription)]
-              );
-            }
-          }
-        }
+      if (diff >= 0 && diff < 5 * 60 * 1000) {
+        await sendPushToUser(
+          row.user_id,
+          'Just Do It',
+          `${row.label}: ${row.title}`
+        );
+      }
+    }
+
+    // ── Daily until done reminders ──
+    const dailyReminders = await pool.query(`
+      SELECT t.id as task_id, t.user_id, t.title,
+             r.id as reminder_id, r.daily_time, r.daily_start
+      FROM tasks t
+      JOIN reminders r ON r.task_id = t.id
+      WHERE r.type = 'daily'
+      AND t.status != 'Done'
+      AND r.daily_start <= $1::date
+      AND r.daily_time IS NOT NULL
+    `, [todayStr]);
+
+    for (const row of dailyReminders.rows) {
+      const [hours, minutes] = row.daily_time.split(':').map(Number);
+      const fireTime = new Date(`${todayStr}T${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:00`);
+      const diff = fireTime.getTime() - now.getTime();
+
+      if (diff >= 0 && diff < 5 * 60 * 1000) {
+        await sendPushToUser(
+          row.user_id,
+          'Just Do It — Reminder',
+          `Don't forget: ${row.title}`
+        );
       }
     }
   } catch (e) {
