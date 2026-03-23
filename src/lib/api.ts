@@ -46,4 +46,12 @@ export const api = {
   reorderCategories: async (categoryIds: string[]): Promise<void> => {
     await axios.post(`${API_BASE}/categories/reorder`, { categoryIds });
   },
+
+  // Push
+  subscribe: async (userId: string, subscription: PushSubscription): Promise<void> => {
+    await axios.post(`${API_BASE}/subscribe`, { userId, subscription });
+  },
+  unsubscribe: async (userId: string): Promise<void> => {
+    await axios.post(`${API_BASE}/unsubscribe`, { userId });
+  },
 };

@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { Task, Category } from '../types';
-import { api } from '../lib/notion';
+import { api } from '../lib/api';
 
 export function useTasks() {
   const [tasks, setTasks] = useState<Task[]>([]);

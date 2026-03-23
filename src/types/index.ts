@@ -3,18 +3,41 @@ export type Status = 'To Do' | 'Done' | 'Skipped';
 export type Recurrence = 'None' | 'Daily' | 'Weekly' | 'Biweekly' | 'Monthly';
 export type RecurrenceDay = 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday';
 
+export interface Reminder {
+  id?: string;
+  type: 'once' | 'daily';
+  offsetMinutes?: number;
+  label?: string;
+  dailyTime?: string;
+  dailyStart?: string;
+}
+
+export const REMINDER_PRESETS: { label: string; offsetMinutes: number }[] = [
+  { label: '15 minutes before', offsetMinutes: 15 },
+  { label: '30 minutes before', offsetMinutes: 30 },
+  { label: '1 hour before', offsetMinutes: 60 },
+  { label: '2 hours before', offsetMinutes: 120 },
+  { label: '3 hours before', offsetMinutes: 180 },
+  { label: '1 day before', offsetMinutes: 1440 },
+  { label: '2 days before', offsetMinutes: 2880 },
+  { label: '1 week before', offsetMinutes: 10080 },
+];
+
 export interface Task {
   id: string;
+  userId?: string;
   title: string;
   category: string;
   status: Status;
   dueDate?: string;
+  reminderTime?: string;
   recurrence: Recurrence;
   recurrenceDay?: RecurrenceDay;
   priority: Priority;
   sortOrder: number;
   lastCompleted?: string;
   notes?: string;
+  reminders: Reminder[];
 }
 
 export interface Category {
@@ -35,4 +58,3 @@ export const CATEGORY_COLORS: Record<string, string> = {
   Pink: 'bg-pink-100 dark:bg-pink-950 text-pink-700 dark:text-pink-300 border-pink-200 dark:border-pink-800',
   Gray: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700',
 };
-

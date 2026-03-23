@@ -7,7 +7,9 @@ import { CategoryEditModal } from './components/CategoryEditModal';
 import { TodayView } from './components/TodayView';
 import { ProfileScreen } from './components/ProfileScreen';
 import { Task, Category } from './types';
-import { setCurrentUser } from './lib/notion';
+import { setCurrentUser } from './lib/api';
+import { registerPushNotifications } from './lib/push';
+
 
 type Tab = 'today' | 'all';
 
@@ -29,6 +31,7 @@ function App() {
     if (user) {
       setCurrentUser(user.id);
       refetch();
+      registerPushNotifications(user.id).catch(console.error);
     }
   }, [user, refetch]);
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Task, Priority, Recurrence, RecurrenceDay } from '../types';
+import { Task, Priority, Recurrence, RecurrenceDay, Reminder, REMINDER_PRESETS } from '../types';
 
 interface Props {
   task?: Task;
@@ -21,12 +21,34 @@ export function TaskModal({ task, existingCategories, onSave, onDelete, onClose 
   const [recurrence, setRecurrence] = useState<Recurrence>(task?.recurrence || 'None');
   const [recurrenceDay, setRecurrenceDay] = useState<RecurrenceDay>(task?.recurrenceDay || 'Sunday');
   const [dueDate, setDueDate] = useState(task?.dueDate ? task.dueDate.split('T')[0] : '');
+  const [reminderTime, setReminderTime] = useState(task?.reminderTime || '');
+  const [reminders, setReminders] = useState<Reminder[]>(task?.reminders || []);
   const [notes, setNotes] = useState(task?.notes || '');
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const finalCategory = (newCategory !== null && newCategory.trim())
     ? newCategory.trim()
     : category;
+
+  const addReminder = (type: 'once' | 'daily') => {
+    if (reminders.length >= 3) return;
+    if (type === 'once') {
+      setReminders([...reminders, { type: 'once', offsetMinutes: 1440, label: '1 day before' }]);
+    } else {
+      const today = new Date().toISOString().split('T')[0];
+      setReminders([...reminders, { type: 'daily', dailyTime: '09:00', dailyStart: today }]);
+    }
+  };
+
+  const updateReminder = (index: number, updates: Partial<Reminder>) => {
+    const updated = [...reminders];
+    updated[index] = { ...updated[index], ...updates };
+    setReminders(updated);
+  };
+
+  const removeReminder = (index: number) => {
+    setReminders(reminders.filter((_, i) => i !== index));
+  };
 
   const handleSave = () => {
     if (!title.trim() || !finalCategory) return;
@@ -37,12 +59,16 @@ export function TaskModal({ task, existingCategories, onSave, onDelete, onClose 
       recurrence,
       recurrenceDay: recurrence === 'Weekly' || recurrence === 'Biweekly' ? recurrenceDay : undefined,
       dueDate: dueDate || undefined,
+      reminderTime: reminders.some(r => r.type === 'once') ? reminderTime || undefined : undefined,
       notes: notes || undefined,
+      reminders,
       ...(isEdit ? {} : { status: 'To Do' as const, sortOrder: 999 }),
     };
     onSave(data, task?.id);
     onClose();
   };
+
+  const hasOnceReminder = reminders.some(r => r.type === 'once');
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center"
@@ -156,6 +182,111 @@ export function TaskModal({ task, existingCategories, onSave, onDelete, onClose 
               onChange={e => setDueDate(e.target.value)}
               className="w-full border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
             />
+          </div>
+
+          {/* Reminders */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                Reminders
+              </label>
+              {reminders.length < 3 && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => addReminder('once')}
+                    disabled={!dueDate}
+                    className="text-xs text-blue-500 font-semibold disabled:text-gray-300 dark:disabled:text-gray-600"
+                  >
+                    + One-time
+                  </button>
+                  <button
+                    onClick={() => addReminder('daily')}
+                    className="text-xs text-purple-500 font-semibold"
+                  >
+                    + Daily nag
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {reminders.length === 0 && (
+              <p className="text-xs text-gray-400 dark:text-gray-600 italic">
+                No reminders set
+              </p>
+            )}
+
+            {/* Reminder time for once reminders */}
+            {hasOnceReminder && (
+              <div className="mb-3">
+                <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">
+                  Time on due date
+                </label>
+                <input
+                  type="time"
+                  value={reminderTime}
+                  onChange={e => setReminderTime(e.target.value)}
+                  className="w-full border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                />
+              </div>
+            )}
+
+            {reminders.map((reminder, index) => (
+              <div key={index} className={`rounded-xl border p-3 mb-2 ${
+                reminder.type === 'once'
+                  ? 'border-blue-100 dark:border-blue-900 bg-blue-50 dark:bg-blue-950'
+                  : 'border-purple-100 dark:border-purple-900 bg-purple-50 dark:bg-purple-950'
+              }`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className={`text-xs font-semibold ${
+                    reminder.type === 'once' ? 'text-blue-600 dark:text-blue-400' : 'text-purple-600 dark:text-purple-400'
+                  }`}>
+                    {reminder.type === 'once' ? '⏰ One-time' : '🔁 Daily until done'}
+                  </span>
+                  <button
+                    onClick={() => removeReminder(index)}
+                    className="text-gray-300 dark:text-gray-600 hover:text-red-400 text-lg"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                {reminder.type === 'once' ? (
+                  <select
+                    value={reminder.offsetMinutes}
+                    onChange={e => {
+                      const preset = REMINDER_PRESETS.find(p => p.offsetMinutes === Number(e.target.value));
+                      if (preset) updateReminder(index, { offsetMinutes: preset.offsetMinutes, label: preset.label });
+                    }}
+                    className="w-full border border-blue-200 dark:border-blue-800 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  >
+                    {REMINDER_PRESETS.map(p => (
+                      <option key={p.offsetMinutes} value={p.offsetMinutes}>{p.label}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">Time</label>
+                      <input
+                        type="time"
+                        value={reminder.dailyTime || '09:00'}
+                        onChange={e => updateReminder(index, { dailyTime: e.target.value })}
+                        className="w-full border border-purple-200 dark:border-purple-800 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">Start date</label>
+                      <input
+                        type="date"
+                        value={reminder.dailyStart || ''}
+                        onChange={e => updateReminder(index, { dailyStart: e.target.value })}
+                        className="w-full border border-purple-200 dark:border-purple-800 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
 
           {/* Notes */}
