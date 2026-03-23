@@ -4,14 +4,14 @@ import { useUser } from './hooks/useUser';
 import { CategoryBoard } from './components/CategoryBoard';
 import { TaskModal } from './components/TaskModal';
 import { CategoryEditModal } from './components/CategoryEditModal';
-import { TodayView } from './components/TodayView';
+import { UpcomingView } from './components/UpcomingView';
 import { ProfileScreen } from './components/ProfileScreen';
 import { Task, Category } from './types';
 import { setCurrentUser } from './lib/api';
 import { registerPushNotifications } from './lib/push';
 
 
-type Tab = 'today' | 'all';
+type Tab = 'upcoming' | 'all';
 
 function App() {
   const { user, selectUser, signOut } = useUser();
@@ -21,7 +21,7 @@ function App() {
     addCategory, updateCategory, deleteCategory, reorderCategories, refetch,
   } = useTasks();
 
-  const [tab, setTab] = useState<Tab>('today');
+  const [tab, setTab] = useState<Tab>('upcoming');
   const [showAdd, setShowAdd] = useState(false);
   const [showAddCategory, setShowAddCategory] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -79,7 +79,7 @@ function App() {
         </div>
 
         <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
-          {([['today', 'Today'], ['all', 'All Tasks']] as [Tab, string][]).map(([key, label]) => (
+          {([['upcoming', 'Upcoming'], ['all', 'All Tasks']] as [Tab, string][]).map(([key, label]) => (
             <button key={key} onClick={() => setTab(key as Tab)}
               className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors
                 ${tab === key ? 'bg-white dark:bg-gray-700 text-gray-800 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}>
@@ -91,8 +91,8 @@ function App() {
 
       {/* Content */}
       <div className="px-4 py-5 max-w-lg mx-auto">
-        {tab === 'today'
-          ? <TodayView tasks={tasks} onComplete={completeTask} />
+        {tab === 'upcoming'
+          ? <UpcomingView tasks={tasks} onComplete={completeTask} onTaskClick={setEditingTask} />
           : <CategoryBoard
               categories={categories}
               onComplete={completeTask}

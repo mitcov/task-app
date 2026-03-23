@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Task, Category } from '../types';
+import { Task, Category, DaySection, SectionAssignment, SectionTemplate } from '../types';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
 
@@ -53,5 +53,42 @@ export const api = {
   },
   unsubscribe: async (userId: string): Promise<void> => {
     await axios.post(`${API_BASE}/unsubscribe`, { userId });
+  },
+
+  // Upcoming
+  getUpcoming: async (date: string): Promise<{ sections: DaySection[]; assignments: SectionAssignment[] }> => {
+    const { data } = await axios.get(`${API_BASE}/upcoming`, { params: { userId: currentUserId, date } });
+    return data;
+  },
+  createDaySection: async (date: string, title: string, sortOrder: number): Promise<DaySection> => {
+    const { data } = await axios.post(`${API_BASE}/day-sections`, { userId: currentUserId, date, title, sortOrder });
+    return data;
+  },
+  updateDaySection: async (id: string, updates: Partial<DaySection>): Promise<DaySection> => {
+    const { data } = await axios.patch(`${API_BASE}/day-sections/${id}`, updates);
+    return data;
+  },
+  deleteDaySection: async (id: string): Promise<void> => {
+    await axios.delete(`${API_BASE}/day-sections/${id}`);
+  },
+  reorderDaySections: async (sectionIds: string[]): Promise<void> => {
+    await axios.post(`${API_BASE}/day-sections/reorder`, { sectionIds });
+  },
+  assignToSection: async (taskId: string, sectionId: string | null, date: string, sortOrder: number): Promise<void> => {
+    await axios.post(`${API_BASE}/section-assignments`, { taskId, sectionId, userId: currentUserId, date, sortOrder });
+  },
+  reorderAssignments: async (assignments: { taskId: string; sectionId: string | null; date: string; sortOrder: number }[]): Promise<void> => {
+    await axios.post(`${API_BASE}/section-assignments/reorder`, { assignments: assignments.map(a => ({ ...a, userId: currentUserId })) });
+  },
+  getSectionTemplates: async (): Promise<SectionTemplate[]> => {
+    const { data } = await axios.get(`${API_BASE}/section-templates`, { params: { userId: currentUserId } });
+    return data;
+  },
+  createSectionTemplate: async (title: string): Promise<SectionTemplate> => {
+    const { data } = await axios.post(`${API_BASE}/section-templates`, { userId: currentUserId, title });
+    return data;
+  },
+  deleteSectionTemplate: async (id: string): Promise<void> => {
+    await axios.delete(`${API_BASE}/section-templates/${id}`);
   },
 };

@@ -462,6 +462,193 @@ cron.schedule('*/5 * * * *', async () => {
   }
 });
 
+// ── Upcoming Routes ───────────────────────────────────────────────────────────
+
+app.get('/upcoming', async (req, res) => {
+  try {
+    const { userId, date } = req.query;
+
+    const sections = await pool.query(
+      'SELECT * FROM day_sections WHERE user_id = $1 AND date = $2 ORDER BY sort_order ASC',
+      [userId, date]
+    );
+
+    const assignments = await pool.query(
+      'SELECT * FROM task_section_assignments WHERE user_id = $1 AND date = $2 ORDER BY sort_order ASC',
+      [userId, date]
+    );
+
+    res.json({
+      sections: sections.rows.map(r => ({
+        id: r.id,
+        userId: r.user_id,
+        date: r.date,
+        title: r.title,
+        sortOrder: r.sort_order,
+      })),
+      assignments: assignments.rows.map(r => ({
+        id: r.id,
+        taskId: r.task_id,
+        sectionId: r.section_id,
+        userId: r.user_id,
+        date: r.date,
+        sortOrder: r.sort_order,
+      })),
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/day-sections', async (req, res) => {
+  try {
+    const { userId, date, title, sortOrder } = req.body;
+    const result = await pool.query(
+      'INSERT INTO day_sections (user_id, date, title, sort_order) VALUES ($1,$2,$3,$4) RETURNING *',
+      [userId, date, title, sortOrder ?? 0]
+    );
+    const r = result.rows[0];
+    res.status(201).json({ id: r.id, userId: r.user_id, date: r.date, title: r.title, sortOrder: r.sort_order });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.patch('/day-sections/:id', async (req, res) => {
+  try {
+    const { title, sortOrder } = req.body;
+    const result = await pool.query(
+      `UPDATE day_sections SET
+        title = COALESCE($1, title),
+        sort_order = COALESCE($2, sort_order)
+       WHERE id = $3 RETURNING *`,
+      [title, sortOrder, req.params.id]
+    );
+    const r = result.rows[0];
+    res.json({ id: r.id, userId: r.user_id, date: r.date, title: r.title, sortOrder: r.sort_order });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/day-sections/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM day_sections WHERE id = $1', [req.params.id]);
+    res.status(204).end();
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/day-sections/reorder', async (req, res) => {
+  try {
+    const { sectionIds } = req.body;
+    await Promise.all(
+      sectionIds.map((id, index) =>
+        pool.query('UPDATE day_sections SET sort_order = $1 WHERE id = $2', [index, id])
+      )
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Section Assignments ───────────────────────────────────────────────────────
+
+app.post('/section-assignments', async (req, res) => {
+  try {
+    const { taskId, sectionId, userId, date, sortOrder } = req.body;
+    const result = await pool.query(
+      `INSERT INTO task_section_assignments (task_id, section_id, user_id, date, sort_order)
+       VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (task_id, date) DO UPDATE SET
+         section_id = $2,
+         sort_order = $5
+       RETURNING *`,
+      [taskId, sectionId || null, userId, date, sortOrder ?? 999]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/section-assignments/reorder', async (req, res) => {
+  try {
+    const { assignments } = req.body;
+    // assignments = [{ taskId, sectionId, date, sortOrder }]
+    await Promise.all(
+      assignments.map(a =>
+        pool.query(
+          `INSERT INTO task_section_assignments (task_id, section_id, user_id, date, sort_order)
+           VALUES ($1,$2,$3,$4,$5)
+           ON CONFLICT (task_id, date) DO UPDATE SET
+             section_id = $2,
+             sort_order = $5`,
+          [a.taskId, a.sectionId || null, a.userId, a.date, a.sortOrder]
+        )
+      )
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Section Templates ─────────────────────────────────────────────────────────
+
+app.get('/section-templates', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    const result = await pool.query(
+      'SELECT * FROM section_templates WHERE user_id = $1 ORDER BY sort_order ASC',
+      [userId]
+    );
+    res.json(result.rows.map(r => ({ id: r.id, userId: r.user_id, title: r.title, sortOrder: r.sort_order })));
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/section-templates', async (req, res) => {
+  try {
+    const { userId, title } = req.body;
+    const count = await pool.query(
+      'SELECT COUNT(*) FROM section_templates WHERE user_id = $1',
+      [userId]
+    );
+    const result = await pool.query(
+      'INSERT INTO section_templates (user_id, title, sort_order) VALUES ($1,$2,$3) RETURNING *',
+      [userId, title, parseInt(count.rows[0].count)]
+    );
+    const r = result.rows[0];
+    res.status(201).json({ id: r.id, userId: r.user_id, title: r.title, sortOrder: r.sort_order });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/section-templates/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM section_templates WHERE id = $1', [req.params.id]);
+    res.status(204).end();
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+
 // ── Start ─────────────────────────────────────────────────────────────────────
 
 const PORT = process.env.PORT || 3001;

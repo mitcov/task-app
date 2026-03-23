@@ -58,3 +58,27 @@ export const CATEGORY_COLORS: Record<string, string> = {
   Pink: 'bg-pink-100 dark:bg-pink-950 text-pink-700 dark:text-pink-300 border-pink-200 dark:border-pink-800',
   Gray: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700',
 };
+
+export interface DaySection {
+  id: string;
+  userId: string;
+  date: string;
+  title: string;
+  sortOrder: number;
+}
+
+export interface SectionAssignment {
+  id: string;
+  taskId: string;
+  sectionId: string | null;
+  userId: string;
+  date: string;
+  sortOrder: number;
+}
+
+export interface SectionTemplate {
+  id: string;
+  userId: string;
+  title: string;
+  sortOrder: number;
+}
