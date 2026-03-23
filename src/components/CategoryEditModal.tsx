@@ -41,7 +41,7 @@ export function CategoryEditModal({ category, onSave, onUpdate, onDelete, onClos
 
         <div className="space-y-4">
           <input
-            autoFocus
+            autoFocus={!isEdit}
             type="text"
             placeholder="Category name"
             value={name}
