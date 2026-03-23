@@ -412,9 +412,13 @@ cron.schedule('*/5 * * * *', async () => {
     for (const row of onceReminders.rows) {
       const dueDate = row.due_date.toISOString().split('T')[0];
       const [hours, minutes] = row.reminder_time.split(':').map(Number);
-      const taskDateTime = new Date(`${dueDate}T${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:00`);
+      // Build the datetime in Eastern time explicitly
+      const taskDateTimeStr = `${dueDate}T${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:00`;
+      const taskDateTime = new Date(new Date(taskDateTimeStr).toLocaleString('en-US', { timeZone: 'America/New_York' }));
       const reminderDateTime = new Date(taskDateTime.getTime() - row.offset_minutes * 60000);
       const diff = reminderDateTime.getTime() - now.getTime();
+      console.log(`[CRON] Task: ${row.title}, reminderAt: ${reminderDateTime.toISOString()}, now: ${now.toISOString()}, diff: ${Math.round(diff/1000)}s`);
+
 
       if (diff >= 0 && diff < 5 * 60 * 1000) {
         await sendPushToUser(
@@ -439,8 +443,11 @@ cron.schedule('*/5 * * * *', async () => {
 
     for (const row of dailyReminders.rows) {
       const [hours, minutes] = row.daily_time.split(':').map(Number);
-      const fireTime = new Date(`${todayStr}T${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:00`);
+      const fireTimeStr = `${todayStr}T${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:00`;
+      const fireTime = new Date(new Date(fireTimeStr).toLocaleString('en-US', { timeZone: 'America/New_York' }));
       const diff = fireTime.getTime() - now.getTime();
+      console.log(`[CRON] Daily task: ${row.title}, fireAt: ${fireTime.toISOString()}, now: ${now.toISOString()}, diff: ${Math.round(diff/1000)}s`);
+
 
       if (diff >= 0 && diff < 5 * 60 * 1000) {
         await sendPushToUser(
