@@ -394,6 +394,7 @@ async function sendPushToUser(userId, title, body) {
 cron.schedule('*/5 * * * *', async () => {
   try {
     const now = new Date();
+    console.log(`[CRON] Running at ${now.toISOString()}`);
     const todayStr = now.toISOString().split('T')[0];
 
     // ── One-time reminders ──
