@@ -399,7 +399,7 @@ cron.schedule('*/5 * * * *', async () => {
 
     // ── One-time reminders ──
     const onceReminders = await pool.query(`
-      SELECT t.id as task_id, t.user_id, t.title, t.due_date, t.reminder_time,
+      SELECT t.id as task_id, t.user_id, t.title, t.due_date, t.reminder_time, t.category,
              r.id as reminder_id, r.offset_minutes, r.label
       FROM tasks t
       JOIN reminders r ON r.task_id = t.id
@@ -423,15 +423,15 @@ cron.schedule('*/5 * * * *', async () => {
       if (diff >= 0 && diff < 5 * 60 * 1000) {
         await sendPushToUser(
           row.user_id,
-          'Just Do It',
-          `${row.label}: ${row.title}`
+          `⏰ ${row.title}`,
+          `Due ${row.label}${row.category && row.category !== 'Uncategorized' ? ' · ' + row.category : ''}${row.due_date ? ' · ' + new Date(row.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}`
         );
       }
     }
 
     // ── Daily until done reminders ──
     const dailyReminders = await pool.query(`
-      SELECT t.id as task_id, t.user_id, t.title,
+      SELECT t.id as task_id, t.user_id, t.title, t.category,
              r.id as reminder_id, r.daily_time, r.daily_start
       FROM tasks t
       JOIN reminders r ON r.task_id = t.id
@@ -452,8 +452,8 @@ cron.schedule('*/5 * * * *', async () => {
       if (diff >= 0 && diff < 5 * 60 * 1000) {
         await sendPushToUser(
           row.user_id,
-          'Just Do It — Reminder',
-          `Don't forget: ${row.title}`
+          `🔁 ${row.title}`,
+          `Daily reminder${row.category && row.category !== 'Uncategorized' ? ' · ' + row.category : ''}`
         );
       }
     }
