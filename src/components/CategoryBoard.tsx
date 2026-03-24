@@ -72,7 +72,7 @@ export function TaskCard({ task, onComplete, onClick, overlay }: TaskCardProps) 
           )}
           {task.dueDate && (
             <span className="text-xs text-gray-400">
-              {new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              {(() => { const [y,m,d] = task.dueDate!.split('-').map(Number); return new Date(y, m-1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); })()}
             </span>
           )}
         </div>
