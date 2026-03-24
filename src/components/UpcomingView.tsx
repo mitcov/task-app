@@ -632,14 +632,12 @@ export function UpcomingView({ tasks, onComplete, onTaskClick }: UpcomingViewPro
 
   // Update the PWA home screen badge whenever today's pending count changes
   useEffect(() => {
-    if (!('setAppBadge' in navigator)) return;
+    const nav = navigator as Navigator & { setAppBadge?: (n: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
     const count = todayTasks.length; // getTasksForDay already excludes Done tasks
     if (count > 0) {
-      (navigator as Navigator & { setAppBadge: (n: number) => Promise<void> })
-        .setAppBadge(count).catch(() => {});
+      nav.setAppBadge?.(count)?.catch(() => {});
     } else {
-      (navigator as Navigator & { clearAppBadge: () => Promise<void> })
-        .clearAppBadge().catch(() => {});
+      nav.clearAppBadge?.()?.catch(() => {});
     }
   }, [todayTasks.length]);
 
