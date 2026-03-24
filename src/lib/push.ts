@@ -19,7 +19,7 @@ export async function registerPushNotifications(userId: string): Promise<boolean
 
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(key),
+      applicationServerKey: urlBase64ToUint8Array(key) as unknown as BufferSource,
     });
 
     await fetch(`${API_BASE}/subscribe`, {

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   DndContext,
   pointerWithin,
@@ -11,6 +11,7 @@ import {
   DragStartEvent,
   DragOverEvent,
   DragOverlay,
+  useDroppable,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -93,7 +94,7 @@ function SectionContainer({
   isDraggingSection: boolean;
 }) {
   return (
-    <div className={`bg-gray-50 dark:bg-gray-900 rounded-2xl border-2 overflow-hidden transition-colors duration-150 mb-1
+    <div className={`bg-gray-50 dark:bg-gray-900 rounded-2xl border-2 transition-colors duration-150 mb-1
       ${isOver || isTaskOver ? 'border-blue-300 dark:border-blue-700' : 'border-gray-200 dark:border-gray-700'}
       ${isDraggingSection ? 'opacity-30' : ''}`}>
       <SectionHeader
@@ -472,9 +473,12 @@ function DayBlock({
   onDeleteTemplate: (id: string) => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
-  const pending = tasks.filter(t => t.status !== 'Done').length;
   const flatItems = buildFlatItems(tasks, sections, assignments, date);
+  const pending = flatItems.filter(i => i.kind === 'task' && i.task.status !== 'Done').length;
   const allIds = flatItems.map(i => i.id);
+
+  // Day-level droppable so cross-day drags work even over empty space
+  const { setNodeRef: setDayRef } = useDroppable({ id: `day-${date}` });
 
   const isActiveTask = !!(activeItemId && !activeItemId.startsWith('section-'));
   const isActiveSection = !!(activeItemId && activeItemId.startsWith('section-'));
@@ -503,7 +507,7 @@ function DayBlock({
     : null;
 
   return (
-    <div className={`mb-8 transition-all duration-200 rounded-2xl p-1
+    <div ref={setDayRef} className={`mb-8 transition-all duration-200 rounded-2xl p-1
       ${isIncomingCrossDayDrop
         ? 'ring-2 ring-blue-400 ring-offset-2 dark:ring-offset-gray-950 bg-blue-50/30 dark:bg-blue-950/20'
         : ''}`}>
@@ -608,9 +612,10 @@ interface UpcomingViewProps {
   onComplete: (id: string) => void;
   onTaskClick: (task: Task) => void;
   onUpdateTask: (id: string, updates: any) => void;
+  onTodayPendingCount?: (count: number) => void;
 }
 
-export function UpcomingView({ tasks, onComplete, onTaskClick }: UpcomingViewProps) {
+export function UpcomingView({ tasks, onComplete, onTaskClick, onTodayPendingCount }: UpcomingViewProps) {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [activeSection, setActiveSection] = useState<DaySection | null>(null);
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
@@ -630,6 +635,11 @@ export function UpcomingView({ tasks, onComplete, onTaskClick }: UpcomingViewPro
     addTemplate, deleteTemplate,
   } = useUpcoming(tasks);
 
+  // Report today's accurate pending count (used for tab badge + PWA badge)
+  useEffect(() => {
+    onTodayPendingCount?.(todayTasks.length);
+  }, [todayTasks.length, onTodayPendingCount]);
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
@@ -646,8 +656,10 @@ export function UpcomingView({ tasks, onComplete, onTaskClick }: UpcomingViewPro
     const sectionId = itemId.startsWith('section-') ? itemId.replace('section-', '') : null;
     const dropzoneId = itemId.startsWith('dropzone-') ? itemId.replace('dropzone-', '') : null;
     const looseDate = itemId.startsWith('loose-') ? itemId.replace('loose-', '') : null;
+    const dayDate = itemId.startsWith('day-') ? itemId.replace('day-', '') : null;
 
     if (looseDate) return looseDate;
+    if (dayDate) return dayDate;
     if (sectionId) {
       if (todaySections.some(s => s.id === sectionId)) return today;
       if (tomorrowSections.some(s => s.id === sectionId)) return tomorrow;
@@ -697,7 +709,13 @@ export function UpcomingView({ tasks, onComplete, onTaskClick }: UpcomingViewPro
     setOverItemId(null);
     setOverDayDate(null);
 
-    if (!over || !prevActiveId) return;
+    if (!over || !prevActiveId) {
+      // Released in empty space — if we were hovering over the other day, still do the cross-day move
+      if (overDayDate && overDayDate !== prevActiveDate && prevTask) {
+        await moveTaskToDay(prevActiveId!, prevActiveDate!, overDayDate);
+      }
+      return;
+    }
     const overIdStr = over.id as string;
     if (prevActiveId === overIdStr) return;
 

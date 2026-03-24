@@ -29,6 +29,7 @@ function App() {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [quickAddCategory, setQuickAddCategory] = useState<string | null>(null);
+  const [todayPendingCount, setTodayPendingCount] = useState(0);
 
   useEffect(() => {
     if (user) {
@@ -37,6 +38,16 @@ function App() {
       registerPushNotifications(user.id).catch(console.error);
     }
   }, [user, refetch]);
+
+  // Sync PWA home screen badge whenever the count changes
+  useEffect(() => {
+    const nav = navigator as Navigator & { setAppBadge?: (n: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
+    if (todayPendingCount > 0) {
+      nav.setAppBadge?.(todayPendingCount)?.catch(() => {});
+    } else {
+      nav.clearAppBadge?.()?.catch(() => {});
+    }
+  }, [todayPendingCount]);
 
   if (!user) return <ProfileScreen onSelect={selectUser} />;
 
@@ -57,19 +68,6 @@ function App() {
   );
 
   const categoryNames = categories.map(c => c.name);
-
-  const todayStr = new Date().toLocaleDateString('en-CA'); // 'YYYY-MM-DD' in local time
-  const todayNum = new Date().getDay();
-  const DAY_MAP: Record<string, number> = { Sunday:0, Monday:1, Tuesday:2, Wednesday:3, Thursday:4, Friday:5, Saturday:6 };
-  const todayPendingCount = tasks.filter(t => {
-    if (t.status === 'Done') return false;
-    if (t.dueDate === todayStr) return true;
-    if (t.recurrence === 'Daily') return true;
-    if ((t.recurrence === 'Weekly' || t.recurrence === 'Biweekly') && t.recurrenceDay) {
-      return DAY_MAP[t.recurrenceDay] === todayNum;
-    }
-    return false;
-  }).length;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -118,6 +116,7 @@ function App() {
             onComplete={completeTask}
             onTaskClick={setEditingTask}
             onUpdateTask={updateTask}
+            onTodayPendingCount={setTodayPendingCount}
           />
         </div>
         <div className={tab === 'all' ? '' : 'hidden'}>
