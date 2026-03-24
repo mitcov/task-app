@@ -5,19 +5,21 @@ import { CategoryBoard } from './components/CategoryBoard';
 import { TaskModal } from './components/TaskModal';
 import { CategoryEditModal } from './components/CategoryEditModal';
 import { UpcomingView } from './components/UpcomingView';
+import { CompletedView } from './components/CompletedView';
 import { ProfileScreen } from './components/ProfileScreen';
 import { Task, Category } from './types';
 import { setCurrentUser } from './lib/api';
 import { registerPushNotifications } from './lib/push';
 
 
-type Tab = 'upcoming' | 'all';
+type Tab = 'upcoming' | 'all' | 'done';
 
 function App() {
   const { user, selectUser, signOut } = useUser();
   const {
     tasks, categories, loading, error,
-    completeTask, addTask, updateTask, deleteTask, reorderTasks,
+    completeTask, uncompleteTask, clearCompletedTasks,
+    addTask, updateTask, deleteTask, reorderTasks,
     addCategory, updateCategory, deleteCategory, reorderCategories, refetch,
   } = useTasks();
 
@@ -79,7 +81,7 @@ function App() {
         </div>
 
         <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
-          {([['upcoming', 'Upcoming'], ['all', 'All Tasks']] as [Tab, string][]).map(([key, label]) => (
+          {([['upcoming', 'Upcoming'], ['all', 'All Tasks'], ['done', 'Done']] as [Tab, string][]).map(([key, label]) => (
             <button key={key} onClick={() => setTab(key as Tab)}
               className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors
                 ${tab === key ? 'bg-white dark:bg-gray-700 text-gray-800 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}>
@@ -91,25 +93,35 @@ function App() {
 
       {/* Content */}
       <div className="px-4 py-5 max-w-lg mx-auto">
-        {tab === 'upcoming'
-          ? <UpcomingView
-              tasks={tasks}
-              onComplete={completeTask}
-              onTaskClick={setEditingTask}
-              onUpdateTask={updateTask}
-            />
-          : <CategoryBoard
-              categories={categories}
-              onComplete={completeTask}
-              onTaskClick={setEditingTask}
-              onEditCategory={setEditingCategory}
-              onReorder={(activeId, overId, activeCat, overCat, cats) =>
-                reorderTasks(activeId, overId, activeCat, overCat, cats)}
-              onReorderCategories={(oldIndex, newIndex, cats) =>
-                reorderCategories(oldIndex, newIndex, cats)}
-            />
-
-        }
+        {tab === 'upcoming' && (
+          <UpcomingView
+            tasks={tasks}
+            onComplete={completeTask}
+            onTaskClick={setEditingTask}
+            onUpdateTask={updateTask}
+          />
+        )}
+        {tab === 'all' && (
+          <CategoryBoard
+            categories={categories}
+            onComplete={completeTask}
+            onTaskClick={setEditingTask}
+            onEditCategory={setEditingCategory}
+            onReorder={(activeId, overId, activeCat, overCat, cats) =>
+              reorderTasks(activeId, overId, activeCat, overCat, cats)}
+            onReorderCategories={(oldIndex, newIndex, cats) =>
+              reorderCategories(oldIndex, newIndex, cats)}
+          />
+        )}
+        {tab === 'done' && (
+          <CompletedView
+            tasks={tasks}
+            categories={categories}
+            onRestore={uncompleteTask}
+            onClearAll={clearCompletedTasks}
+            onTaskClick={setEditingTask}
+          />
+        )}
       </div>
 
       {/* Modals */}
