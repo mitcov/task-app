@@ -77,6 +77,9 @@ export const api = {
   assignToSection: async (taskId: string, sectionId: string | null, date: string, sortOrder: number): Promise<void> => {
     await axios.post(`${API_BASE}/section-assignments`, { taskId, sectionId, userId: currentUserId, date, sortOrder });
   },
+  deleteAssignment: async (id: string): Promise<void> => {
+    await axios.delete(`${API_BASE}/section-assignments/${id}`);
+  },
   reorderAssignments: async (assignments: { taskId: string; sectionId: string | null; date: string; sortOrder: number }[]): Promise<void> => {
     await axios.post(`${API_BASE}/section-assignments/reorder`, { assignments: assignments.map(a => ({ ...a, userId: currentUserId })) });
   },
