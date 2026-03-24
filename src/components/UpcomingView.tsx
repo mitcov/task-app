@@ -373,7 +373,7 @@ function buildFlatItems(
 
 function DayBlock({
   label, date, tasks, sections, assignments, templates,
-  activeItemId, overItemId, overDayDate,
+  activeItemId, activeItemDate, overItemId, overDayDate,
   onComplete, onTaskClick, onAddSection, onRenameSection,
   onDeleteSection, onSaveTemplate, onDeleteTemplate,
 }: {
@@ -384,6 +384,7 @@ function DayBlock({
   assignments: SectionAssignment[];
   templates: SectionTemplate[];
   activeItemId: string | null;
+  activeItemDate: string | null;
   overItemId: string | null;
   overDayDate: string | null;
   onComplete: (id: string) => void;
@@ -400,8 +401,10 @@ function DayBlock({
   const allIds = flatItems.map(i => i.id);
 
   const isActiveTask = activeItemId && !activeItemId.startsWith('section-');
-  const isDraggingFromOtherDay = isActiveTask && overDayDate !== date && overDayDate !== null;
-  const isThisDayTargeted = overDayDate === date;
+  // True when a task from ANOTHER day is currently being dragged INTO this day
+  const isIncomingCrossDayDrop = !!(isActiveTask && activeItemDate && activeItemDate !== date && overDayDate === date);
+  // True when a task from THIS day is being dragged OUT to another day
+  const isOutgoingCrossDayDrag = !!(isActiveTask && activeItemDate === date && overDayDate !== null && overDayDate !== date);
 
   // Figure out which section is being hovered over
   const getHoveredSectionId = (): string | null => {
@@ -417,7 +420,7 @@ function DayBlock({
 
   return (
     <div className={`mb-8 transition-all duration-200 rounded-2xl p-1
-      ${isDraggingFromOtherDay && isThisDayTargeted
+      ${isIncomingCrossDayDrop
         ? 'ring-2 ring-blue-400 ring-offset-2 dark:ring-offset-gray-950 bg-blue-50/30 dark:bg-blue-950/20'
         : ''}`}>
       <div className="flex items-center justify-between mb-3">
@@ -440,11 +443,11 @@ function DayBlock({
         <SortableContext items={allIds} strategy={verticalListSortingStrategy}>
           {tasks.length === 0 && sections.length === 0 ? (
             <div className={`rounded-xl border-2 border-dashed p-4 text-center transition-colors
-              ${isDraggingFromOtherDay && isThisDayTargeted
+              ${isIncomingCrossDayDrop
                 ? 'border-blue-400 bg-blue-50 dark:bg-blue-950'
                 : 'border-gray-200 dark:border-gray-700'}`}>
               <p className="text-xs text-gray-400 dark:text-gray-600">
-                {isDraggingFromOtherDay ? 'Drop to move here' : 'Nothing scheduled'}
+                {isIncomingCrossDayDrop ? 'Drop to move here' : 'Nothing scheduled'}
               </p>
             </div>
           ) : (
@@ -494,23 +497,16 @@ function DayBlock({
                 return null;
               })}
 
-              {/* Cross-day drop zone */}
-              {isActiveTask && !isDraggingFromOtherDay && (
-                <DropZone
-                  id={`cross-day-${date}`}
-                  isOver={false}
-                  label=""
-                  active={false}
-                />
+              {/* Cross-day drop zone — shown at bottom of source day when dragging out */}
+              {isOutgoingCrossDayDrag && (
+                <div className="rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 p-3 text-center mt-2 opacity-40">
+                  <p className="text-xs text-gray-300 dark:text-gray-600">Drag to other day to move</p>
+                </div>
               )}
-              {isDraggingFromOtherDay && (
-                <div className={`rounded-xl border-2 border-dashed p-3 text-center transition-all duration-200 mt-2
-                  ${isThisDayTargeted
-                    ? 'border-blue-400 bg-blue-50 dark:bg-blue-950 opacity-100'
-                    : 'border-gray-200 dark:border-gray-700 opacity-40'}`}>
-                  <p className={`text-xs ${isThisDayTargeted ? 'text-blue-500' : 'text-gray-300 dark:text-gray-600'}`}>
-                    Drop to move to {label}
-                  </p>
+              {/* Cross-day drop zone — shown at bottom of destination day when dragging in */}
+              {isIncomingCrossDayDrop && (
+                <div className="rounded-xl border-2 border-dashed border-blue-400 bg-blue-50 dark:bg-blue-950 p-3 text-center mt-2">
+                  <p className="text-xs text-blue-500">Drop to move to {label}</p>
                 </div>
               )}
             </>
@@ -703,7 +699,8 @@ export function UpcomingView({ tasks, onComplete, onTaskClick, onUpdateTask }: U
         label="Today" date={today}
         tasks={todayTasks} sections={todaySections} assignments={todayAssignments}
         templates={templates}
-        activeItemId={activeItemId} overItemId={overItemId} overDayDate={overDayDate}
+        activeItemId={activeItemId} activeItemDate={activeItemDate}
+        overItemId={overItemId} overDayDate={overDayDate}
         onComplete={onComplete} onTaskClick={onTaskClick}
         onAddSection={addSection}
         onRenameSection={(id, title) => updateSection(id, { title })}
@@ -714,7 +711,8 @@ export function UpcomingView({ tasks, onComplete, onTaskClick, onUpdateTask }: U
         label="Tomorrow" date={tomorrow}
         tasks={tomorrowTasks} sections={tomorrowSections} assignments={tomorrowAssignments}
         templates={templates}
-        activeItemId={activeItemId} overItemId={overItemId} overDayDate={overDayDate}
+        activeItemId={activeItemId} activeItemDate={activeItemDate}
+        overItemId={overItemId} overDayDate={overDayDate}
         onComplete={onComplete} onTaskClick={onTaskClick}
         onAddSection={addSection}
         onRenameSection={(id, title) => updateSection(id, { title })}

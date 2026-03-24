@@ -110,17 +110,17 @@ function App() {
         </div>
       </div>
 
-      {/* Content */}
+      {/* Content — all three views stay mounted to avoid reload flashes */}
       <div className="px-4 py-5 max-w-lg mx-auto">
-        {tab === 'upcoming' && (
+        <div className={tab === 'upcoming' ? '' : 'hidden'}>
           <UpcomingView
             tasks={tasks}
             onComplete={completeTask}
             onTaskClick={setEditingTask}
             onUpdateTask={updateTask}
           />
-        )}
-        {tab === 'all' && (
+        </div>
+        <div className={tab === 'all' ? '' : 'hidden'}>
           <CategoryBoard
             categories={categories}
             onComplete={completeTask}
@@ -132,8 +132,8 @@ function App() {
             onReorderCategories={(oldIndex, newIndex, cats) =>
               reorderCategories(oldIndex, newIndex, cats)}
           />
-        )}
-        {tab === 'done' && (
+        </div>
+        <div className={tab === 'done' ? '' : 'hidden'}>
           <CompletedView
             tasks={tasks}
             categories={categories}
@@ -141,7 +141,7 @@ function App() {
             onClearAll={clearCompletedTasks}
             onTaskClick={setEditingTask}
           />
-        )}
+        </div>
       </div>
 
       {/* Modals */}
