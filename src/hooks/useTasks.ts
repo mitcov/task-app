@@ -29,6 +29,7 @@ export function useTasks() {
   const groupedCategories = useCallback((): Category[] => {
     const taskMap: Record<string, Task[]> = {};
     tasks.forEach(task => {
+      if (task.status === 'Done') return; // Done tasks live in the Done tab
       if (!taskMap[task.category]) taskMap[task.category] = [];
       taskMap[task.category].push(task);
     });
@@ -55,6 +56,17 @@ export function useTasks() {
     await api.updateTask(id, { status: 'Done', lastCompleted: new Date().toISOString() });
     await fetchAll();
   }, [fetchAll]);
+
+  const uncompleteTask = useCallback(async (id: string) => {
+    await api.updateTask(id, { status: 'To Do' });
+    await fetchAll();
+  }, [fetchAll]);
+
+  const clearCompletedTasks = useCallback(async () => {
+    const doneTasks = tasks.filter(t => t.status === 'Done');
+    await Promise.all(doneTasks.map(t => api.deleteTask(t.id)));
+    await fetchAll();
+  }, [tasks, fetchAll]);
 
   const addTask = useCallback(async (task: Omit<Task, 'id'>) => {
     await api.addTask(task);
@@ -141,6 +153,8 @@ export function useTasks() {
     categories: groupedCategories(),
     rawCategories: categories,
     completeTask,
+    uncompleteTask,
+    clearCompletedTasks,
     addTask,
     updateTask,
     deleteTask,

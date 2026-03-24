@@ -72,7 +72,7 @@ export function TaskCard({ task, onComplete, onClick, overlay }: TaskCardProps) 
           )}
           {task.dueDate && (
             <span className="text-xs text-gray-400">
-              {new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              {(() => { const [y,m,d] = task.dueDate!.split('-').map(Number); return new Date(y, m-1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); })()}
             </span>
           )}
         </div>
@@ -88,11 +88,12 @@ interface CategoryColumnProps {
   onComplete: (id: string) => void;
   onTaskClick: (task: Task) => void;
   onEditCategory: (cat: Category) => void;
+  onQuickAdd: (categoryName: string) => void;
   isOver?: boolean;
   isDraggingCategory?: boolean;
 }
 
-function CategoryColumn({ category, onComplete, onTaskClick, onEditCategory, isOver, isDraggingCategory }: CategoryColumnProps) {
+function CategoryColumn({ category, onComplete, onTaskClick, onEditCategory, onQuickAdd, isOver, isDraggingCategory }: CategoryColumnProps) {
   const [collapsed, setCollapsed] = useState(false);
   const colorClass = CATEGORY_COLORS[category.color] || CATEGORY_COLORS.Gray;
   const pending = category.tasks.filter(t => t.status !== 'Done').length;
@@ -139,6 +140,10 @@ function CategoryColumn({ category, onComplete, onTaskClick, onEditCategory, isO
           <span className="text-gray-400 text-sm ml-1">{collapsed ? '▸' : '▾'}</span>
         </button>
 
+        <button onClick={() => onQuickAdd(category.name)}
+          className="text-gray-300 hover:text-blue-400 transition-colors text-lg font-light px-2 leading-none">
+          +
+        </button>
         <button onClick={() => onEditCategory(category)}
           className="text-gray-300 hover:text-gray-500 transition-colors text-sm px-2">
           ✎
@@ -177,12 +182,13 @@ interface CategoryBoardProps {
   onComplete: (id: string) => void;
   onTaskClick: (task: Task) => void;
   onEditCategory: (cat: Category) => void;
+  onQuickAdd: (categoryName: string) => void;
   onReorder: (activeId: string, overId: string, activeCat: string, overCat: string, cats: Category[]) => void;
   onReorderCategories: (oldIndex: number, newIndex: number, cats: Category[]) => void;
 }
 
 export function CategoryBoard({
-  categories, onComplete, onTaskClick, onEditCategory, onReorder, onReorderCategories
+  categories, onComplete, onTaskClick, onEditCategory, onQuickAdd, onReorder, onReorderCategories
 }: CategoryBoardProps) {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [activeCategory, setActiveCategory] = useState<Category | null>(null);
@@ -272,6 +278,7 @@ export function CategoryBoard({
             onComplete={onComplete}
             onTaskClick={onTaskClick}
             onEditCategory={onEditCategory}
+            onQuickAdd={onQuickAdd}
             isOver={overCategory === cat.name}
             isDraggingCategory={!!activeCategory}
           />

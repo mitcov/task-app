@@ -5,6 +5,11 @@ const { Pool } = require('pg');
 const webpush = require('web-push');
 const cron = require('node-cron');
 
+const { types } = require('pg');
+// Return DATE columns as plain strings (e.g. '2024-03-15') instead of JS Date objects.
+// Without this, pg creates a Date at midnight UTC which shifts the day in non-UTC timezones.
+types.setTypeParser(1082, val => val);
+
 const app = express();
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
 
@@ -86,7 +91,7 @@ function rowToReminder(r) {
     offsetMinutes: r.offset_minutes,
     label: r.label,
     dailyTime: r.daily_time || null,
-    dailyStart: r.daily_start ? r.daily_start.toISOString().split('T')[0] : null,
+    dailyStart: r.daily_start || null,
   };
 }
 
@@ -100,7 +105,7 @@ function rowToTask(row, reminders = []) {
     priority: row.priority,
     recurrence: row.recurrence,
     recurrenceDay: row.recurrence_day,
-    dueDate: row.due_date ? row.due_date.toISOString().split('T')[0] : null,
+    dueDate: row.due_date || null,
     reminderTime: row.reminder_time || null,
     sortOrder: row.sort_order,
     lastCompleted: row.last_completed,
@@ -410,7 +415,7 @@ cron.schedule('*/5 * * * *', async () => {
     `);
 
     for (const row of onceReminders.rows) {
-      const dueDate = row.due_date.toISOString().split('T')[0];
+      const dueDate = row.due_date; // already a 'YYYY-MM-DD' string from pg type parser
       const [hours, minutes] = row.reminder_time.split(':').map(Number);
       // Build the datetime in Eastern time explicitly
       const taskDateTimeStr = `${dueDate}T${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:00`;
@@ -419,12 +424,14 @@ cron.schedule('*/5 * * * *', async () => {
       const diff = reminderDateTime.getTime() - now.getTime();
       console.log(`[CRON] Task: ${row.title}, reminderAt: ${reminderDateTime.toISOString()}, now: ${now.toISOString()}, diff: ${Math.round(diff/1000)}s`);
 
-
       if (diff >= 0 && diff < 5 * 60 * 1000) {
+        const dueDateDisplay = row.due_date
+          ? (() => { const [y,m,d] = row.due_date.split('-').map(Number); return new Date(y,m-1,d).toLocaleDateString('en-US',{month:'short',day:'numeric'}); })()
+          : '';
         await sendPushToUser(
           row.user_id,
           `⏰ ${row.title}`,
-          `Due ${row.label}${row.category && row.category !== 'Uncategorized' ? ' · ' + row.category : ''}${row.due_date ? ' · ' + new Date(row.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}`
+          `Due ${row.label}${row.category && row.category !== 'Uncategorized' ? ' · ' + row.category : ''}${dueDateDisplay ? ' · ' + dueDateDisplay : ''}`
         );
       }
     }

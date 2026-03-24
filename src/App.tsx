@@ -5,19 +5,21 @@ import { CategoryBoard } from './components/CategoryBoard';
 import { TaskModal } from './components/TaskModal';
 import { CategoryEditModal } from './components/CategoryEditModal';
 import { UpcomingView } from './components/UpcomingView';
+import { CompletedView } from './components/CompletedView';
 import { ProfileScreen } from './components/ProfileScreen';
 import { Task, Category } from './types';
 import { setCurrentUser } from './lib/api';
 import { registerPushNotifications } from './lib/push';
 
 
-type Tab = 'upcoming' | 'all';
+type Tab = 'upcoming' | 'all' | 'done';
 
 function App() {
   const { user, selectUser, signOut } = useUser();
   const {
     tasks, categories, loading, error,
-    completeTask, addTask, updateTask, deleteTask, reorderTasks,
+    completeTask, uncompleteTask, clearCompletedTasks,
+    addTask, updateTask, deleteTask, reorderTasks,
     addCategory, updateCategory, deleteCategory, reorderCategories, refetch,
   } = useTasks();
 
@@ -26,6 +28,7 @@ function App() {
   const [showAddCategory, setShowAddCategory] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [quickAddCategory, setQuickAddCategory] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -55,6 +58,19 @@ function App() {
 
   const categoryNames = categories.map(c => c.name);
 
+  const todayStr = new Date().toLocaleDateString('en-CA'); // 'YYYY-MM-DD' in local time
+  const todayNum = new Date().getDay();
+  const DAY_MAP: Record<string, number> = { Sunday:0, Monday:1, Tuesday:2, Wednesday:3, Thursday:4, Friday:5, Saturday:6 };
+  const todayPendingCount = tasks.filter(t => {
+    if (t.status === 'Done') return false;
+    if (t.dueDate === todayStr) return true;
+    if (t.recurrence === 'Daily') return true;
+    if ((t.recurrence === 'Weekly' || t.recurrence === 'Biweekly') && t.recurrenceDay) {
+      return DAY_MAP[t.recurrenceDay] === todayNum;
+    }
+    return false;
+  }).length;
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* Header */}
@@ -79,37 +95,53 @@ function App() {
         </div>
 
         <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
-          {([['upcoming', 'Upcoming'], ['all', 'All Tasks']] as [Tab, string][]).map(([key, label]) => (
+          {([['upcoming', 'Upcoming'], ['all', 'All Tasks'], ['done', 'Done']] as [Tab, string][]).map(([key, label]) => (
             <button key={key} onClick={() => setTab(key as Tab)}
-              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors
+              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors relative
                 ${tab === key ? 'bg-white dark:bg-gray-700 text-gray-800 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}>
               {label}
+              {key === 'upcoming' && todayPendingCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-[10px] font-bold min-w-[16px] h-4 px-1 rounded-full flex items-center justify-center leading-none">
+                  {todayPendingCount}
+                </span>
+              )}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Content */}
+      {/* Content — all three views stay mounted to avoid reload flashes */}
       <div className="px-4 py-5 max-w-lg mx-auto">
-        {tab === 'upcoming'
-          ? <UpcomingView
-              tasks={tasks}
-              onComplete={completeTask}
-              onTaskClick={setEditingTask}
-              onUpdateTask={updateTask}
-            />
-          : <CategoryBoard
-              categories={categories}
-              onComplete={completeTask}
-              onTaskClick={setEditingTask}
-              onEditCategory={setEditingCategory}
-              onReorder={(activeId, overId, activeCat, overCat, cats) =>
-                reorderTasks(activeId, overId, activeCat, overCat, cats)}
-              onReorderCategories={(oldIndex, newIndex, cats) =>
-                reorderCategories(oldIndex, newIndex, cats)}
-            />
-
-        }
+        <div className={tab === 'upcoming' ? '' : 'hidden'}>
+          <UpcomingView
+            tasks={tasks}
+            onComplete={completeTask}
+            onTaskClick={setEditingTask}
+            onUpdateTask={updateTask}
+          />
+        </div>
+        <div className={tab === 'all' ? '' : 'hidden'}>
+          <CategoryBoard
+            categories={categories}
+            onComplete={completeTask}
+            onTaskClick={setEditingTask}
+            onEditCategory={setEditingCategory}
+            onQuickAdd={setQuickAddCategory}
+            onReorder={(activeId, overId, activeCat, overCat, cats) =>
+              reorderTasks(activeId, overId, activeCat, overCat, cats)}
+            onReorderCategories={(oldIndex, newIndex, cats) =>
+              reorderCategories(oldIndex, newIndex, cats)}
+          />
+        </div>
+        <div className={tab === 'done' ? '' : 'hidden'}>
+          <CompletedView
+            tasks={tasks}
+            categories={categories}
+            onRestore={uncompleteTask}
+            onClearAll={clearCompletedTasks}
+            onTaskClick={setEditingTask}
+          />
+        </div>
       </div>
 
       {/* Modals */}
@@ -118,13 +150,22 @@ function App() {
           existingCategories={categoryNames}
           onSave={async (data) => {
             const taskData = data as Omit<Task, 'id'>;
-            // If this is a new category not already in our list, save it
             if (taskData.category && !categoryNames.some(c => c.toLowerCase() === taskData.category.toLowerCase())) {
               await addCategory(taskData.category, 'Gray');
             }
             await addTask(taskData);
           }}
           onClose={() => setShowAdd(false)}
+        />
+      )}
+      {quickAddCategory && (
+        <TaskModal
+          existingCategories={categoryNames}
+          lockedCategory={quickAddCategory}
+          onSave={async (data) => {
+            await addTask(data as Omit<Task, 'id'>);
+          }}
+          onClose={() => setQuickAddCategory(null)}
         />
       )}
       {showAddCategory && (
