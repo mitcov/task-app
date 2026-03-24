@@ -58,6 +58,19 @@ function App() {
 
   const categoryNames = categories.map(c => c.name);
 
+  const todayStr = new Date().toLocaleDateString('en-CA'); // 'YYYY-MM-DD' in local time
+  const todayNum = new Date().getDay();
+  const DAY_MAP: Record<string, number> = { Sunday:0, Monday:1, Tuesday:2, Wednesday:3, Thursday:4, Friday:5, Saturday:6 };
+  const todayPendingCount = tasks.filter(t => {
+    if (t.status === 'Done') return false;
+    if (t.dueDate === todayStr) return true;
+    if (t.recurrence === 'Daily') return true;
+    if ((t.recurrence === 'Weekly' || t.recurrence === 'Biweekly') && t.recurrenceDay) {
+      return DAY_MAP[t.recurrenceDay] === todayNum;
+    }
+    return false;
+  }).length;
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* Header */}
@@ -84,9 +97,14 @@ function App() {
         <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
           {([['upcoming', 'Upcoming'], ['all', 'All Tasks'], ['done', 'Done']] as [Tab, string][]).map(([key, label]) => (
             <button key={key} onClick={() => setTab(key as Tab)}
-              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors
+              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors relative
                 ${tab === key ? 'bg-white dark:bg-gray-700 text-gray-800 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}>
               {label}
+              {key === 'upcoming' && todayPendingCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-[10px] font-bold min-w-[16px] h-4 px-1 rounded-full flex items-center justify-center leading-none">
+                  {todayPendingCount}
+                </span>
+              )}
             </button>
           ))}
         </div>
