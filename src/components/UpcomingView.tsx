@@ -625,7 +625,7 @@ export function UpcomingView({ tasks, onComplete, onTaskClick }: UpcomingViewPro
     todayAssignments, tomorrowAssignments,
     templates, loading,
     addSection, updateSection, deleteSection,
-    reorderSections, reorderDayItems, reorderAssignments,
+    reorderDayItems, reorderAssignments,
     moveTaskToDay, moveSectionToDay,
     addTemplate, deleteTemplate,
   } = useUpcoming(tasks);
@@ -689,7 +689,6 @@ export function UpcomingView({ tasks, onComplete, onTaskClick }: UpcomingViewPro
     const prevActiveId = activeItemId;
     const prevActiveDate = activeItemDate;
     const prevTask = activeTask;
-    const prevSection = activeSection;
 
     setActiveTask(null);
     setActiveSection(null);
