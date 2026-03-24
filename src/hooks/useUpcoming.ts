@@ -8,7 +8,7 @@ const DAY_MAP: Record<string, number> = {
   Thursday: 4, Friday: 5, Saturday: 6,
 };
 
-export function useUpcoming(tasks: Task[]) {
+export function useUpcoming(tasks: Task[], onUpdateTaskDate: (id: string, date: string) => void) {
   const [todaySections, setTodaySections] = useState<DaySection[]>([]);
   const [tomorrowSections, setTomorrowSections] = useState<DaySection[]>([]);
   const [todayAssignments, setTodayAssignments] = useState<SectionAssignment[]>([]);
@@ -18,7 +18,6 @@ export function useUpcoming(tasks: Task[]) {
 
   const today = format(new Date(), 'yyyy-MM-dd');
   const tomorrow = format(new Date(Date.now() + 86400000), 'yyyy-MM-dd');
-
   const todayNum = new Date().getDay();
   const tomorrowNum = (todayNum + 1) % 7;
 
@@ -77,15 +76,21 @@ export function useUpcoming(tasks: Task[]) {
     await fetchUpcoming();
   }, [fetchUpcoming]);
 
-  const assignTask = useCallback(async (
+  const moveTaskToDay = useCallback(async (
     taskId: string,
-    sectionId: string | null,
-    date: string,
-    sortOrder: number
+    fromDate: string,
+    toDate: string,
+    task: Task
   ) => {
-    await api.assignToSection(taskId, sectionId, date, sortOrder);
+    // Remove assignment from old day
+    // Add assignment to new day (unsectioned)
+    await api.assignToSection(taskId, null, toDate, 999);
+    // If task had an explicit due date, update it
+    if (task.dueDate) {
+      await onUpdateTaskDate(taskId, toDate);
+    }
     await fetchUpcoming();
-  }, [fetchUpcoming]);
+  }, [fetchUpcoming, onUpdateTaskDate]);
 
   const reorderAssignments = useCallback(async (
     assignments: { taskId: string; sectionId: string | null; date: string; sortOrder: number }[]
@@ -119,8 +124,8 @@ export function useUpcoming(tasks: Task[]) {
     updateSection,
     deleteSection,
     reorderSections,
-    assignTask,
     reorderAssignments,
+    moveTaskToDay,
     addTemplate,
     deleteTemplate,
     refetch: fetchUpcoming,

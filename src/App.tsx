@@ -92,7 +92,12 @@ function App() {
       {/* Content */}
       <div className="px-4 py-5 max-w-lg mx-auto">
         {tab === 'upcoming'
-          ? <UpcomingView tasks={tasks} onComplete={completeTask} onTaskClick={setEditingTask} />
+          ? <UpcomingView
+              tasks={tasks}
+              onComplete={completeTask}
+              onTaskClick={setEditingTask}
+              onUpdateTask={updateTask}
+            />
           : <CategoryBoard
               categories={categories}
               onComplete={completeTask}
