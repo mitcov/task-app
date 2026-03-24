@@ -28,6 +28,7 @@ function App() {
   const [showAddCategory, setShowAddCategory] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [quickAddCategory, setQuickAddCategory] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -107,6 +108,7 @@ function App() {
             onComplete={completeTask}
             onTaskClick={setEditingTask}
             onEditCategory={setEditingCategory}
+            onQuickAdd={setQuickAddCategory}
             onReorder={(activeId, overId, activeCat, overCat, cats) =>
               reorderTasks(activeId, overId, activeCat, overCat, cats)}
             onReorderCategories={(oldIndex, newIndex, cats) =>
@@ -130,13 +132,22 @@ function App() {
           existingCategories={categoryNames}
           onSave={async (data) => {
             const taskData = data as Omit<Task, 'id'>;
-            // If this is a new category not already in our list, save it
             if (taskData.category && !categoryNames.some(c => c.toLowerCase() === taskData.category.toLowerCase())) {
               await addCategory(taskData.category, 'Gray');
             }
             await addTask(taskData);
           }}
           onClose={() => setShowAdd(false)}
+        />
+      )}
+      {quickAddCategory && (
+        <TaskModal
+          existingCategories={categoryNames}
+          lockedCategory={quickAddCategory}
+          onSave={async (data) => {
+            await addTask(data as Omit<Task, 'id'>);
+          }}
+          onClose={() => setQuickAddCategory(null)}
         />
       )}
       {showAddCategory && (
