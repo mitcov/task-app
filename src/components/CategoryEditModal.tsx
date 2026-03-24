@@ -72,7 +72,7 @@ export function CategoryEditModal({ category, onSave, onUpdate, onDelete, onClos
 
         {isEdit && onDelete && !confirmDelete && (
           <button onClick={() => setConfirmDelete(true)}
-            className="w-full mt-3 -ml-3 pl-3 text-red-400 hover:text-red-600 font-medium py-2 text-sm transition-colors">
+            className="w-full mt-3 text-red-400 hover:text-red-600 font-medium py-2 text-sm transition-colors">
             Delete Category & All Its Tasks
           </button>
         )}

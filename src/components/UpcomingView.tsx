@@ -70,7 +70,7 @@ function SectionHeader({
         </button>
       )}
       <button onClick={() => onDelete(section.id)}
-        className="text-gray-200 dark:text-gray-700 hover:text-red-400 text-base flex-shrink-0">
+        className="text-gray-200 dark:text-gray-700 hover:text-red-400 text-base flex-shrink-0 pl-3">
         ×
       </button>
     </div>
