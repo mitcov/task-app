@@ -608,9 +608,10 @@ interface UpcomingViewProps {
   onComplete: (id: string) => void;
   onTaskClick: (task: Task) => void;
   onUpdateTask: (id: string, updates: any) => void;
+  onTodayPendingCount?: (count: number) => void;
 }
 
-export function UpcomingView({ tasks, onComplete, onTaskClick }: UpcomingViewProps) {
+export function UpcomingView({ tasks, onComplete, onTaskClick, onTodayPendingCount }: UpcomingViewProps) {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [activeSection, setActiveSection] = useState<DaySection | null>(null);
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
@@ -630,16 +631,10 @@ export function UpcomingView({ tasks, onComplete, onTaskClick }: UpcomingViewPro
     addTemplate, deleteTemplate,
   } = useUpcoming(tasks);
 
-  // Update the PWA home screen badge whenever today's pending count changes
+  // Report today's accurate pending count (used for tab badge + PWA badge)
   useEffect(() => {
-    const nav = navigator as Navigator & { setAppBadge?: (n: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
-    const count = todayTasks.length; // getTasksForDay already excludes Done tasks
-    if (count > 0) {
-      nav.setAppBadge?.(count)?.catch(() => {});
-    } else {
-      nav.clearAppBadge?.()?.catch(() => {});
-    }
-  }, [todayTasks.length]);
+    onTodayPendingCount?.(todayTasks.length);
+  }, [todayTasks.length, onTodayPendingCount]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
