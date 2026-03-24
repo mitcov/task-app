@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import {
   DndContext,
-  closestCenter,
+  pointerWithin,
   PointerSensor,
   TouchSensor,
   KeyboardSensor,
@@ -11,7 +11,6 @@ import {
   DragStartEvent,
   DragOverEvent,
   DragOverlay,
-  useDroppable,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -23,24 +22,30 @@ import { CSS } from '@dnd-kit/utilities';
 import { Task, DaySection, SectionAssignment, SectionTemplate } from '../types';
 import { useUpcoming } from '../hooks/useUpcoming';
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+type FlatItem =
+  | { kind: 'section'; id: string; section: DaySection }
+  | { kind: 'task'; id: string; task: Task; sectionId: string | null }
+  | { kind: 'dropzone'; id: string; sectionId: string }
+  | { kind: 'loose-zone'; id: string; date: string };
+
 // ── Section Header ────────────────────────────────────────────────────────────
 
-interface SectionHeaderProps {
+function SectionHeader({
+  section, onRename, onDelete, dragHandleProps,
+}: {
   section: DaySection;
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
   dragHandleProps: any;
-}
-
-function SectionHeader({ section, onRename, onDelete, dragHandleProps }: SectionHeaderProps) {
+}) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(section.title);
 
   const handleBlur = () => {
     setEditing(false);
-    if (title.trim() && title !== section.title) {
-      onRename(section.id, title.trim());
-    }
+    if (title.trim() && title !== section.title) onRename(section.id, title.trim());
   };
 
   return (
@@ -59,166 +64,86 @@ function SectionHeader({ section, onRename, onDelete, dragHandleProps }: Section
           className="flex-1 text-sm font-semibold bg-transparent border-b border-blue-400 outline-none text-gray-700 dark:text-gray-300 py-0.5"
         />
       ) : (
-        <button
-          onClick={() => setEditing(true)}
-          className="flex-1 text-left text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
-        >
+        <button onClick={() => setEditing(true)}
+          className="flex-1 text-left text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
           {section.title}
         </button>
       )}
-      <button
-        onClick={() => onDelete(section.id)}
-        className="text-gray-200 dark:text-gray-700 hover:text-red-400 text-base flex-shrink-0"
-      >
+      <button onClick={() => onDelete(section.id)}
+        className="text-gray-200 dark:text-gray-700 hover:text-red-400 text-base flex-shrink-0">
         ×
       </button>
     </div>
   );
 }
 
-// ── Section Block (draggable whole unit) ─────────────────────────────────────
+// ── Section Container (sortable, wraps header + tasks visually) ───────────────
 
-interface SectionBlockProps {
+function SectionContainer({
+  section, isOver, onRename, onDelete, children, dragHandleProps, isDraggingSection,
+}: {
   section: DaySection;
-  tasks: Task[];
-  isDragging: boolean;
-  isTaskOver: boolean;
+  isOver: boolean;
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
-  onComplete: (id: string) => void;
-  onTaskClick: (task: Task) => void;
-  getAssignment: (taskId: string) => SectionAssignment | undefined;
-  activeTaskId: string | null;
-}
-
-function SectionBlock({
-  section, tasks, isDragging, isTaskOver,
-  onRename, onDelete, onComplete, onTaskClick,
-  getAssignment, activeTaskId,
-}: SectionBlockProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging: isSectionDragging,
-  } = useSortable({
-    id: `section-${section.id}`,
-    data: { type: 'section', sectionId: section.id },
-  });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isSectionDragging ? 0.3 : 1,
-  };
-
-  const sectionTasks = tasks
-    .filter(t => getAssignment(t.id)?.sectionId === section.id)
-    .sort((a, b) => (getAssignment(a.id)?.sortOrder ?? 999) - (getAssignment(b.id)?.sortOrder ?? 999));
-
+  children: React.ReactNode;
+  dragHandleProps: any;
+  isDraggingSection: boolean;
+}) {
   return (
-    <div ref={setNodeRef} style={style} className="mb-3">
-      <div className={`bg-gray-50 dark:bg-gray-900 rounded-2xl border-2 overflow-hidden transition-colors duration-150
-        ${isTaskOver ? 'border-blue-300 dark:border-blue-700' : 'border-gray-200 dark:border-gray-700'}`}>
-        <SectionHeader
-          section={section}
-          onRename={onRename}
-          onDelete={onDelete}
-          dragHandleProps={{ ...attributes, ...listeners }}
-        />
-        <div className="p-3 space-y-0">
-          {sectionTasks.map(task => (
-            <TaskRow
-              key={task.id}
-              task={task}
-              onComplete={onComplete}
-              onTaskClick={onTaskClick}
-            />
-          ))}
-          {/* Drop zone — only visible during drag */}
-          {activeTaskId && (
-            <SectionDropZone
-              sectionId={section.id}
-              isOver={isTaskOver}
-            />
-          )}
-        </div>
+    <div className={`bg-gray-50 dark:bg-gray-900 rounded-2xl border-2 overflow-hidden transition-colors duration-150 mb-1
+      ${isOver ? 'border-blue-300 dark:border-blue-700' : 'border-gray-200 dark:border-gray-700'}
+      ${isDraggingSection ? 'opacity-30' : ''}`}>
+      <SectionHeader
+        section={section}
+        onRename={onRename}
+        onDelete={onDelete}
+        dragHandleProps={dragHandleProps}
+      />
+      <div className="px-3 pt-2 pb-2">
+        {children}
       </div>
     </div>
   );
 }
 
-// ── Section Drop Zone ─────────────────────────────────────────────────────────
+// ── Drop Zone ─────────────────────────────────────────────────────────────────
 
-interface SectionDropZoneProps {
-  sectionId: string;
+function DropZone({ id, isOver, label, active }: {
+  id: string;
   isOver: boolean;
-}
-
-function SectionDropZone({ sectionId, isOver }: SectionDropZoneProps) {
-  const { setNodeRef } = useSortable({
-    id: `dropzone-${sectionId}`,
-    data: { type: 'dropzone', sectionId },
-  });
+  label: string;
+  active: boolean;
+}) {
+  const { setNodeRef } = useSortable({ id, data: { type: 'dropzone', id } });
 
   return (
     <div
       ref={setNodeRef}
       className={`rounded-xl border-2 border-dashed text-center transition-all duration-200 overflow-hidden
-        ${isOver
-          ? 'border-blue-400 bg-blue-50 dark:bg-blue-950 p-3 opacity-100'
-          : 'border-gray-200 dark:border-gray-700 p-1 opacity-40'}`}
+        ${active
+          ? isOver
+            ? 'border-blue-400 bg-blue-50 dark:bg-blue-950 p-3 opacity-100 mb-2'
+            : 'border-gray-300 dark:border-gray-600 p-2 opacity-60 mb-2'
+          : 'p-0 opacity-0 mb-0 border-transparent pointer-events-none h-0'}`}
     >
-      <p className={`text-xs transition-colors ${isOver ? 'text-blue-500' : 'text-gray-300 dark:text-gray-600'}`}>
-        {isOver ? 'Drop here' : '·'}
-      </p>
-    </div>
-  );
-}
-
-// ── Loose Tasks Drop Zone ─────────────────────────────────────────────────────
-
-interface LooseDropZoneProps {
-  date: string;
-  isOver: boolean;
-  active: boolean;
-}
-
-function LooseDropZone({ date, isOver, active }: LooseDropZoneProps) {
-  const { setNodeRef } = useDroppable({
-    id: `loose-${date}`,
-    data: { type: 'loose', date },
-  });
-
-  if (!active) return null;
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={`rounded-xl border-2 border-dashed text-center transition-all duration-200 mb-2
-        ${isOver
-          ? 'border-blue-400 bg-blue-50 dark:bg-blue-950 p-3'
-          : 'border-gray-200 dark:border-gray-700 p-2 opacity-50'}`}
-    >
-      <p className={`text-xs ${isOver ? 'text-blue-500' : 'text-gray-300 dark:text-gray-600'}`}>
-        {isOver ? 'Drop to unassign from section' : 'Drop here for loose task'}
-      </p>
+      {active && (
+        <p className={`text-xs transition-colors ${isOver ? 'text-blue-500' : 'text-gray-400 dark:text-gray-500'}`}>
+          {isOver ? label : '·'}
+        </p>
+      )}
     </div>
   );
 }
 
 // ── Task Row ──────────────────────────────────────────────────────────────────
 
-interface TaskRowProps {
+function TaskRow({ task, onComplete, onTaskClick, overlay }: {
   task: Task;
   onComplete: (id: string) => void;
   onTaskClick: (task: Task) => void;
   overlay?: boolean;
-}
-
-function TaskRow({ task, onComplete, onTaskClick, overlay }: TaskRowProps) {
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id, data: { type: 'task', taskId: task.id } });
 
@@ -243,9 +168,7 @@ function TaskRow({ task, onComplete, onTaskClick, overlay }: TaskRowProps) {
       <button
         onClick={(e) => { e.stopPropagation(); onComplete(task.id); }}
         className={`w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors
-          ${task.status === 'Done'
-            ? 'bg-green-400 border-green-400 text-white'
-            : 'border-gray-300 hover:border-green-400'}`}
+          ${task.status === 'Done' ? 'bg-green-400 border-green-400 text-white' : 'border-gray-300 hover:border-green-400'}`}
       >
         {task.status === 'Done' && <span className="text-xs">✓</span>}
       </button>
@@ -256,26 +179,82 @@ function TaskRow({ task, onComplete, onTaskClick, overlay }: TaskRowProps) {
         <div className="flex items-center gap-2 mt-0.5">
           <span className="text-xs text-gray-400">{task.category}</span>
           <span className="text-xs text-gray-400">{task.priority}</span>
-          {task.recurrence !== 'None' && (
-            <span className="text-xs text-blue-400">↻</span>
-          )}
+          {task.recurrence !== 'None' && <span className="text-xs text-blue-400">↻</span>}
         </div>
       </div>
     </div>
   );
 }
 
+// ── Sortable Section (the whole block as a draggable unit) ────────────────────
+
+function SortableSection({
+  section, flatItems, isOver, activeTaskId, activeItemId,
+  onRename, onDelete, onComplete, onTaskClick,
+}: {
+  section: DaySection;
+  flatItems: FlatItem[];
+  isOver: boolean;
+  activeTaskId: string | null;
+  activeItemId: string | null;
+  onRename: (id: string, title: string) => void;
+  onDelete: (id: string) => void;
+  onComplete: (id: string) => void;
+  onTaskClick: (task: Task) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: `section-${section.id}`, data: { type: 'section', sectionId: section.id } });
+
+  const style = { transform: CSS.Transform.toString(transform), transition };
+
+  const sectionTaskItems = flatItems.filter(
+    i => i.kind === 'task' && i.sectionId === section.id
+  ) as Extract<FlatItem, { kind: 'task' }>[];
+
+  const dropzoneItem = flatItems.find(
+    i => i.kind === 'dropzone' && i.sectionId === section.id
+  );
+
+  return (
+    <div ref={setNodeRef} style={style} className="mb-3">
+      <SectionContainer
+        section={section}
+        isOver={isOver}
+        onRename={onRename}
+        onDelete={onDelete}
+        dragHandleProps={{ ...attributes, ...listeners }}
+        isDraggingSection={isDragging}
+      >
+        {sectionTaskItems.map(item => (
+          <TaskRow
+            key={item.task.id}
+            task={item.task}
+            onComplete={onComplete}
+            onTaskClick={onTaskClick}
+          />
+        ))}
+        {dropzoneItem && (
+          <DropZone
+            id={dropzoneItem.id}
+            isOver={activeItemId === null ? false : isOver}
+            label="Drop here"
+            active={!!activeTaskId}
+          />
+        )}
+      </SectionContainer>
+    </div>
+  );
+}
+
 // ── Add Section Button ────────────────────────────────────────────────────────
 
-interface AddSectionButtonProps {
+function AddSectionButton({ date, templates, onAdd, onSaveTemplate, onDeleteTemplate }: {
   date: string;
   templates: SectionTemplate[];
   onAdd: (date: string, title: string) => void;
   onSaveTemplate: (title: string) => void;
   onDeleteTemplate: (id: string) => void;
-}
-
-function AddSectionButton({ date, templates, onAdd, onSaveTemplate, onDeleteTemplate }: AddSectionButtonProps) {
+}) {
   const [open, setOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [saveAsTemplate, setSaveAsTemplate] = useState(false);
@@ -290,13 +269,10 @@ function AddSectionButton({ date, templates, onAdd, onSaveTemplate, onDeleteTemp
 
   return (
     <div className="relative">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="text-xs text-blue-500 font-semibold hover:text-blue-600 transition-colors"
-      >
+      <button onClick={() => setOpen(o => !o)}
+        className="text-xs text-blue-500 font-semibold hover:text-blue-600 transition-colors">
         + Section
       </button>
-
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
@@ -306,18 +282,12 @@ function AddSectionButton({ date, templates, onAdd, onSaveTemplate, onDeleteTemp
                 <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-2">Templates</p>
                 {templates.map(t => (
                   <div key={t.id} className="flex items-center gap-2 mb-1">
-                    <button
-                      onClick={() => handleAdd(t.title)}
-                      className="flex-1 text-left text-sm text-gray-700 dark:text-gray-300 hover:text-blue-500 py-1"
-                    >
+                    <button onClick={() => handleAdd(t.title)}
+                      className="flex-1 text-left text-sm text-gray-700 dark:text-gray-300 hover:text-blue-500 py-1">
                       {t.title}
                     </button>
-                    <button
-                      onClick={() => onDeleteTemplate(t.id)}
-                      className="text-gray-300 dark:text-gray-600 hover:text-red-400 text-sm"
-                    >
-                      ×
-                    </button>
+                    <button onClick={() => onDeleteTemplate(t.id)}
+                      className="text-gray-300 dark:text-gray-600 hover:text-red-400 text-sm">×</button>
                   </div>
                 ))}
                 <div className="border-t border-gray-100 dark:border-gray-700 my-2" />
@@ -325,35 +295,22 @@ function AddSectionButton({ date, templates, onAdd, onSaveTemplate, onDeleteTemp
             )}
             <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-2">New Section</p>
             <input
-              autoFocus
-              type="text"
-              placeholder="Section title..."
-              value={newTitle}
-              onChange={e => setNewTitle(e.target.value)}
+              autoFocus type="text" placeholder="Section title..."
+              value={newTitle} onChange={e => setNewTitle(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && newTitle.trim()) handleAdd(newTitle.trim()); }}
               className="w-full border border-gray-200 dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 mb-2"
             />
             <label className="flex items-center gap-2 mb-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={saveAsTemplate}
-                onChange={e => setSaveAsTemplate(e.target.checked)}
-                className="rounded"
-              />
+              <input type="checkbox" checked={saveAsTemplate} onChange={e => setSaveAsTemplate(e.target.checked)} className="rounded" />
               <span className="text-xs text-gray-500 dark:text-gray-400">Save as template</span>
             </label>
             <div className="flex gap-2">
-              <button
-                onClick={() => { if (newTitle.trim()) handleAdd(newTitle.trim()); }}
-                disabled={!newTitle.trim()}
-                className="flex-1 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-200 text-white text-sm font-semibold py-2 rounded-xl transition-colors"
-              >
+              <button onClick={() => { if (newTitle.trim()) handleAdd(newTitle.trim()); }} disabled={!newTitle.trim()}
+                className="flex-1 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-200 text-white text-sm font-semibold py-2 rounded-xl transition-colors">
                 Add
               </button>
-              <button
-                onClick={() => setOpen(false)}
-                className="flex-1 border border-gray-200 dark:border-gray-700 text-gray-500 text-sm font-semibold py-2 rounded-xl transition-colors"
-              >
+              <button onClick={() => setOpen(false)}
+                className="flex-1 border border-gray-200 dark:border-gray-700 text-gray-500 text-sm font-semibold py-2 rounded-xl transition-colors">
                 Cancel
               </button>
             </div>
@@ -364,19 +321,71 @@ function AddSectionButton({ date, templates, onAdd, onSaveTemplate, onDeleteTemp
   );
 }
 
+// ── Build flat item list for a day ────────────────────────────────────────────
+
+function buildFlatItems(
+  tasks: Task[],
+  sections: DaySection[],
+  assignments: SectionAssignment[],
+  date: string
+): FlatItem[] {
+  const items: FlatItem[] = [];
+  const getAssignment = (taskId: string) => assignments.find(a => a.taskId === taskId);
+
+  // Sort sections by sortOrder
+  const sortedSections = [...sections].sort((a, b) => a.sortOrder - b.sortOrder);
+
+  sortedSections.forEach(section => {
+    // Section header
+    items.push({ kind: 'section', id: `section-${section.id}`, section });
+
+    // Tasks in this section
+    const sectionTasks = tasks
+      .filter(t => getAssignment(t.id)?.sectionId === section.id)
+      .sort((a, b) => (getAssignment(a.id)?.sortOrder ?? 999) - (getAssignment(b.id)?.sortOrder ?? 999));
+
+    sectionTasks.forEach(task => {
+      items.push({ kind: 'task', id: task.id, task, sectionId: section.id });
+    });
+
+    // Drop zone inside section
+    items.push({ kind: 'dropzone', id: `dropzone-${section.id}`, sectionId: section.id });
+  });
+
+  // Loose zone (between sections and loose tasks)
+  if (sections.length > 0) {
+    items.push({ kind: 'loose-zone', id: `loose-${date}`, date });
+  }
+
+  // Loose tasks
+  const looseTasks = tasks
+    .filter(t => { const a = getAssignment(t.id); return !a || a.sectionId === null; })
+    .sort((a, b) => (getAssignment(a.id)?.sortOrder ?? 999) - (getAssignment(b.id)?.sortOrder ?? 999));
+
+  looseTasks.forEach(task => {
+    items.push({ kind: 'task', id: task.id, task, sectionId: null });
+  });
+
+  return items;
+}
+
 // ── Day Block ─────────────────────────────────────────────────────────────────
 
-interface DayBlockProps {
+function DayBlock({
+  label, date, tasks, sections, assignments, templates,
+  activeItemId, overItemId, overDayDate,
+  onComplete, onTaskClick, onAddSection, onRenameSection,
+  onDeleteSection, onSaveTemplate, onDeleteTemplate,
+}: {
   label: string;
   date: string;
   tasks: Task[];
   sections: DaySection[];
   assignments: SectionAssignment[];
   templates: SectionTemplate[];
-  activeTaskId: string | null;
-  activeSectionDate: string | null;
+  activeItemId: string | null;
+  overItemId: string | null;
   overDayDate: string | null;
-  overSectionId: string | null;
   onComplete: (id: string) => void;
   onTaskClick: (task: Task) => void;
   onAddSection: (date: string, title: string) => void;
@@ -384,40 +393,33 @@ interface DayBlockProps {
   onDeleteSection: (id: string) => void;
   onSaveTemplate: (title: string) => void;
   onDeleteTemplate: (id: string) => void;
-}
-
-function DayBlock({
-  label, date, tasks, sections, assignments, templates,
-  activeTaskId, activeSectionDate, overDayDate, overSectionId,
-  onComplete, onTaskClick, onAddSection,
-  onRenameSection, onDeleteSection,
-  onSaveTemplate, onDeleteTemplate,
-}: DayBlockProps) {
+}) {
   const [collapsed, setCollapsed] = useState(false);
   const pending = tasks.filter(t => t.status !== 'Done').length;
-  const isThisDayOver = overDayDate === date && !overSectionId;
-  const isDraggingFromOtherDay = activeTaskId !== null && activeSectionDate !== date;
+  const flatItems = buildFlatItems(tasks, sections, assignments, date);
+  const allIds = flatItems.map(i => i.id);
 
-  const getAssignment = useCallback(
-    (taskId: string) => assignments.find(a => a.taskId === taskId),
-    [assignments]
-  );
+  const isActiveTask = activeItemId && !activeItemId.startsWith('section-');
+  const isDraggingFromOtherDay = isActiveTask && overDayDate !== date && overDayDate !== null;
+  const isThisDayTargeted = overDayDate === date;
 
-  const looseTasks = tasks
-    .filter(t => { const a = getAssignment(t.id); return !a || a.sectionId === null; })
-    .sort((a, b) => (getAssignment(a.id)?.sortOrder ?? 999) - (getAssignment(b.id)?.sortOrder ?? 999));
-
-  const sectionIds = sections.map(s => `section-${s.id}`);
-  const looseTaskIds = looseTasks.map(t => t.id);
-  const dropzoneIds = sections.map(s => `dropzone-${s.id}`);
-  const allIds = [...sectionIds, ...looseTaskIds, ...dropzoneIds];
+  // Figure out which section is being hovered over
+  const getHoveredSectionId = (): string | null => {
+    if (!overItemId) return null;
+    if (overItemId.startsWith('dropzone-')) return overItemId.replace('dropzone-', '');
+    if (overItemId.startsWith('section-')) return overItemId.replace('section-', '');
+    // Task — find its section
+    const item = flatItems.find(i => i.id === overItemId);
+    if (item?.kind === 'task') return item.sectionId;
+    return null;
+  };
+  const hoveredSectionId = getHoveredSectionId();
 
   return (
-    <div className={`mb-8 rounded-2xl transition-all duration-200
-      ${isDraggingFromOtherDay && isThisDayOver
-        ? 'ring-2 ring-blue-400 ring-offset-2 dark:ring-offset-gray-950'
-        : ''}`}
-    >
+    <div className={`mb-8 transition-all duration-200 rounded-2xl p-1
+      ${isDraggingFromOtherDay && isThisDayTargeted
+        ? 'ring-2 ring-blue-400 ring-offset-2 dark:ring-offset-gray-950 bg-blue-50/30 dark:bg-blue-950/20'
+        : ''}`}>
       <div className="flex items-center justify-between mb-3">
         <button onClick={() => setCollapsed(c => !c)} className="flex items-center gap-2">
           <h2 className="text-base font-bold text-gray-800 dark:text-white">{label}</h2>
@@ -429,11 +431,8 @@ function DayBlock({
           <span className="text-gray-400 text-sm">{collapsed ? '▸' : '▾'}</span>
         </button>
         <AddSectionButton
-          date={date}
-          templates={templates}
-          onAdd={onAddSection}
-          onSaveTemplate={onSaveTemplate}
-          onDeleteTemplate={onDeleteTemplate}
+          date={date} templates={templates}
+          onAdd={onAddSection} onSaveTemplate={onSaveTemplate} onDeleteTemplate={onDeleteTemplate}
         />
       </div>
 
@@ -441,7 +440,7 @@ function DayBlock({
         <SortableContext items={allIds} strategy={verticalListSortingStrategy}>
           {tasks.length === 0 && sections.length === 0 ? (
             <div className={`rounded-xl border-2 border-dashed p-4 text-center transition-colors
-              ${isDraggingFromOtherDay && isThisDayOver
+              ${isDraggingFromOtherDay && isThisDayTargeted
                 ? 'border-blue-400 bg-blue-50 dark:bg-blue-950'
                 : 'border-gray-200 dark:border-gray-700'}`}>
               <p className="text-xs text-gray-400 dark:text-gray-600">
@@ -450,47 +449,66 @@ function DayBlock({
             </div>
           ) : (
             <>
-              {sections.map(section => (
-                <SectionBlock
-                  key={section.id}
-                  section={section}
-                  tasks={tasks}
-                  isDragging={false}
-                  isTaskOver={overSectionId === section.id}
-                  onRename={onRenameSection}
-                  onDelete={onDeleteSection}
-                  onComplete={onComplete}
-                  onTaskClick={onTaskClick}
-                  getAssignment={getAssignment}
-                  activeTaskId={activeTaskId}
-                />
-              ))}
+              {flatItems.map(item => {
+                if (item.kind === 'section') {
+                  return (
+                    <SortableSection
+                      key={item.id}
+                      section={item.section}
+                      flatItems={flatItems}
+                      isOver={hoveredSectionId === item.section.id}
+                      activeTaskId={isActiveTask ? activeItemId : null}
+                      activeItemId={overItemId}
+                      onRename={onRenameSection}
+                      onDelete={onDeleteSection}
+                      onComplete={onComplete}
+                      onTaskClick={onTaskClick}
+                    />
+                  );
+                }
 
-              {/* Loose tasks drop zone — only during drag */}
-              {activeTaskId && sections.length > 0 && (
-                <LooseDropZone
-                  date={date}
-                  isOver={isThisDayOver && overSectionId === null}
-                  active={!!activeTaskId}
+                if (item.kind === 'task' && item.sectionId === null) {
+                  return (
+                    <TaskRow
+                      key={item.id}
+                      task={item.task}
+                      onComplete={onComplete}
+                      onTaskClick={onTaskClick}
+                    />
+                  );
+                }
+
+                if (item.kind === 'loose-zone') {
+                  return (
+                    <DropZone
+                      key={item.id}
+                      id={item.id}
+                      isOver={overItemId === item.id}
+                      label="Drop here to remove from section"
+                      active={!!isActiveTask}
+                    />
+                  );
+                }
+
+                // Tasks inside sections and dropzones are rendered inside SortableSection
+                return null;
+              })}
+
+              {/* Cross-day drop zone */}
+              {isActiveTask && !isDraggingFromOtherDay && (
+                <DropZone
+                  id={`cross-day-${date}`}
+                  isOver={false}
+                  label=""
+                  active={false}
                 />
               )}
-
-              {looseTasks.map(task => (
-                <TaskRow
-                  key={task.id}
-                  task={task}
-                  onComplete={onComplete}
-                  onTaskClick={onTaskClick}
-                />
-              ))}
-
-              {/* Cross-day drop indicator */}
               {isDraggingFromOtherDay && (
                 <div className={`rounded-xl border-2 border-dashed p-3 text-center transition-all duration-200 mt-2
-                  ${isThisDayOver
+                  ${isThisDayTargeted
                     ? 'border-blue-400 bg-blue-50 dark:bg-blue-950 opacity-100'
                     : 'border-gray-200 dark:border-gray-700 opacity-40'}`}>
-                  <p className={`text-xs ${isThisDayOver ? 'text-blue-500' : 'text-gray-300 dark:text-gray-600'}`}>
+                  <p className={`text-xs ${isThisDayTargeted ? 'text-blue-500' : 'text-gray-300 dark:text-gray-600'}`}>
                     Drop to move to {label}
                   </p>
                 </div>
@@ -514,9 +532,10 @@ interface UpcomingViewProps {
 
 export function UpcomingView({ tasks, onComplete, onTaskClick, onUpdateTask }: UpcomingViewProps) {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
-  const [activeTaskDate, setActiveTaskDate] = useState<string | null>(null);
+  const [activeItemId, setActiveItemId] = useState<string | null>(null);
+  const [activeItemDate, setActiveItemDate] = useState<string | null>(null);
+  const [overItemId, setOverItemId] = useState<string | null>(null);
   const [overDayDate, setOverDayDate] = useState<string | null>(null);
-  const [overSectionId, setOverSectionId] = useState<string | null>(null);
 
   const handleUpdateTaskDate = useCallback(async (id: string, date: string) => {
     await onUpdateTask(id, { dueDate: date });
@@ -538,93 +557,78 @@ export function UpcomingView({ tasks, onComplete, onTaskClick, onUpdateTask }: U
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  const allAssignments = [...todayAssignments, ...tomorrowAssignments];
-  const allSections = [...todaySections, ...tomorrowSections];
+  const allAssignments = React.useMemo(
+    () => [...todayAssignments, ...tomorrowAssignments],
+    [todayAssignments, tomorrowAssignments]
+  );
 
-  const getTaskById = (id: string) => tasks.find(t => t.id === id);
-  const getSectionDate = (sectionId: string) => {
-    if (todaySections.some(s => s.id === sectionId)) return today;
-    if (tomorrowSections.some(s => s.id === sectionId)) return tomorrow;
-    return null;
-  };
-  const getTaskDate = (taskId: string) => {
-    const assignment = allAssignments.find(a => a.taskId === taskId);
+  // Given any item id, determine which date it belongs to
+  const getDateForItem = useCallback((itemId: string): string | null => {
+    if (!itemId) return null;
+    const sectionId = itemId.startsWith('section-') ? itemId.replace('section-', '') : null;
+    const dropzoneId = itemId.startsWith('dropzone-') ? itemId.replace('dropzone-', '') : null;
+    const looseDate = itemId.startsWith('loose-') ? itemId.replace('loose-', '') : null;
+
+    if (looseDate) return looseDate;
+    if (sectionId) {
+      if (todaySections.some(s => s.id === sectionId)) return today;
+      if (tomorrowSections.some(s => s.id === sectionId)) return tomorrow;
+    }
+    if (dropzoneId) {
+      if (todaySections.some(s => s.id === dropzoneId)) return today;
+      if (tomorrowSections.some(s => s.id === dropzoneId)) return tomorrow;
+    }
+    // Task id
+    const assignment = allAssignments.find(a => a.taskId === itemId);
     if (assignment) return assignment.date;
-    if (todayTasks.some(t => t.id === taskId)) return today;
-    if (tomorrowTasks.some(t => t.id === taskId)) return tomorrow;
+    if (todayTasks.some(t => t.id === itemId)) return today;
+    if (tomorrowTasks.some(t => t.id === itemId)) return tomorrow;
     return null;
-  };
-  const getAssignmentForDay = (taskId: string, date: string) =>
-    allAssignments.find(a => a.taskId === taskId && a.date === date);
+  }, [today, tomorrow, todaySections, tomorrowSections, todayTasks, tomorrowTasks, allAssignments]);
 
   const handleDragStart = ({ active }: DragStartEvent) => {
-    if (active.data.current?.type === 'task') {
-      const task = getTaskById(active.id as string);
-      if (task) {
-        setActiveTask(task);
-        setActiveTaskDate(getTaskDate(active.id as string));
-      }
+    const id = active.id as string;
+    setActiveItemId(id);
+    if (!id.startsWith('section-')) {
+      const task = tasks.find(t => t.id === id);
+      if (task) setActiveTask(task);
     }
+    setActiveItemDate(getDateForItem(id));
   };
 
-  const handleDragOver = ({ active, over }: DragOverEvent) => {
-    if (!over) { setOverDayDate(null); setOverSectionId(null); return; }
-
-    const overData = over.data?.current as any;
-
-    if (overData?.type === 'dropzone') {
-      setOverSectionId(overData.sectionId);
-      setOverDayDate(getSectionDate(overData.sectionId));
+  const handleDragOver = ({ over }: DragOverEvent) => {
+    if (!over) {
+      setOverItemId(null);
+      setOverDayDate(null);
       return;
     }
-
-    if (overData?.type === 'section') {
-      setOverSectionId(overData.sectionId);
-      setOverDayDate(getSectionDate(overData.sectionId));
-      return;
-    }
-
-    if (overData?.type === 'loose') {
-      setOverSectionId(null);
-      setOverDayDate(overData.date);
-      return;
-    }
-
-    if (overData?.type === 'task') {
-      const assignment = allAssignments.find(a => a.taskId === over.id);
-      setOverSectionId(assignment?.sectionId ?? null);
-      const taskDate = getTaskDate(over.id as string);
-      setOverDayDate(taskDate);
-      return;
-    }
-
-    setOverDayDate(null);
-    setOverSectionId(null);
+    const overId = over.id as string;
+    setOverItemId(overId);
+    setOverDayDate(getDateForItem(overId));
   };
 
   const handleDragEnd = async ({ active, over }: DragEndEvent) => {
+    const prevActiveId = activeItemId;
+    const prevActiveDate = activeItemDate;
     const prevTask = activeTask;
-    const prevTaskDate = activeTaskDate;
+
     setActiveTask(null);
-    setActiveTaskDate(null);
+    setActiveItemId(null);
+    setActiveItemDate(null);
+    setOverItemId(null);
     setOverDayDate(null);
-    setOverSectionId(null);
 
-    if (!over || active.id === over.id) return;
-
-    const activeIdStr = active.id as string;
+    if (!over || !prevActiveId) return;
     const overIdStr = over.id as string;
-    const overData = over.data?.current as any;
+    if (prevActiveId === overIdStr) return;
+
+    const targetDate = getDateForItem(overIdStr) || prevActiveDate;
+    if (!targetDate || !prevActiveDate) return;
 
     // ── Section reorder ──
-    if (activeIdStr.startsWith('section-')) {
-      const activeSectionId = activeIdStr.replace('section-', '');
-      const activeSection = allSections.find(s => s.id === activeSectionId);
-      if (!activeSection) return;
-      const date = getSectionDate(activeSectionId);
-      if (!date) return;
-      const daySections = date === today ? todaySections : tomorrowSections;
-
+    if (prevActiveId.startsWith('section-')) {
+      const activeSectionId = prevActiveId.replace('section-', '');
+      const daySections = prevActiveDate === today ? todaySections : tomorrowSections;
       if (overIdStr.startsWith('section-')) {
         const overSectionId = overIdStr.replace('section-', '');
         const oldIndex = daySections.findIndex(s => s.id === activeSectionId);
@@ -633,114 +637,94 @@ export function UpcomingView({ tasks, onComplete, onTaskClick, onUpdateTask }: U
           const reordered = [...daySections];
           const [moved] = reordered.splice(oldIndex, 1);
           reordered.splice(newIndex, 0, moved);
-          await reorderSections(date, reordered.map(s => s.id));
+          await reorderSections(prevActiveDate, reordered.map(s => s.id));
         }
       }
       return;
     }
 
-    // ── Task drag ──
-    if (!prevTask || !prevTaskDate) return;
-    const targetDate = overDayDate || prevTaskDate;
-    const isCrossDay = targetDate !== prevTaskDate;
-
-    if (isCrossDay) {
-      await moveTaskToDay(activeIdStr, prevTaskDate, targetDate, prevTask);
+    // ── Cross-day task move ──
+    if (targetDate !== prevActiveDate) {
+      if (prevTask) await moveTaskToDay(prevActiveId, prevActiveDate, targetDate, prevTask);
       return;
     }
 
-    // Same-day reorder/reassign
+    // ── Same-day task reorder / section assignment ──
     const dayTasks = targetDate === today ? todayTasks : tomorrowTasks;
     const dayAssignments = targetDate === today ? todayAssignments : tomorrowAssignments;
+    const daySections = targetDate === today ? todaySections : tomorrowSections;
+    const flatItems = buildFlatItems(dayTasks, daySections, dayAssignments, targetDate);
 
+    // Determine new sectionId
     let newSectionId: string | null = null;
-    let newSortOrder = 999;
-
     if (overIdStr.startsWith('dropzone-')) {
       newSectionId = overIdStr.replace('dropzone-', '');
-      newSortOrder = 999;
-    } else if (overData?.type === 'loose') {
+    } else if (overIdStr.startsWith('loose-')) {
       newSectionId = null;
-      newSortOrder = 999;
     } else if (overIdStr.startsWith('section-')) {
       newSectionId = overIdStr.replace('section-', '');
-      newSortOrder = 0;
     } else {
-      // Dropped on a task
-      const overAssignment = dayAssignments.find(a => a.taskId === overIdStr);
-      newSectionId = overAssignment?.sectionId ?? null;
-      const overIndex = dayTasks.findIndex(t => t.id === overIdStr);
-      newSortOrder = overIndex;
+      // Dropped on a task — inherit its section
+      const overItem = flatItems.find(i => i.id === overIdStr);
+      if (overItem?.kind === 'task') newSectionId = overItem.sectionId;
     }
 
+    // Compute new sort orders — place active task at the over item's index
+    const overIndex = flatItems.findIndex(i => i.id === overIdStr);
     const newAssignments = dayTasks.map((t, idx) => {
-      const a = getAssignmentForDay(t.id, targetDate);
-      if (t.id === activeIdStr) {
-        return { taskId: t.id, sectionId: newSectionId, date: targetDate, sortOrder: newSortOrder };
+      const existing = dayAssignments.find(a => a.taskId === t.id);
+      if (t.id === prevActiveId) {
+        return { taskId: t.id, sectionId: newSectionId, date: targetDate, sortOrder: overIndex };
       }
-      return { taskId: t.id, sectionId: a?.sectionId ?? null, date: targetDate, sortOrder: a?.sortOrder ?? idx };
+      return {
+        taskId: t.id,
+        sectionId: existing?.sectionId ?? null,
+        date: targetDate,
+        sortOrder: existing?.sortOrder ?? idx,
+      };
     });
 
     await reorderAssignments(newAssignments);
   };
 
-  if (loading) return <p className="text-xs text-gray-400 dark:text-gray-600 text-center py-8">Loading...</p>;
+  if (loading) return (
+    <p className="text-xs text-gray-400 dark:text-gray-600 text-center py-8">Loading...</p>
+  );
 
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCenter}
+      collisionDetection={pointerWithin}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
       <DayBlock
-        label="Today"
-        date={today}
-        tasks={todayTasks}
-        sections={todaySections}
-        assignments={todayAssignments}
+        label="Today" date={today}
+        tasks={todayTasks} sections={todaySections} assignments={todayAssignments}
         templates={templates}
-        activeTaskId={activeTask?.id ?? null}
-        activeSectionDate={activeTaskDate}
-        overDayDate={overDayDate}
-        overSectionId={overSectionId}
-        onComplete={onComplete}
-        onTaskClick={onTaskClick}
+        activeItemId={activeItemId} overItemId={overItemId} overDayDate={overDayDate}
+        onComplete={onComplete} onTaskClick={onTaskClick}
         onAddSection={addSection}
         onRenameSection={(id, title) => updateSection(id, { title })}
         onDeleteSection={deleteSection}
-        onSaveTemplate={addTemplate}
-        onDeleteTemplate={deleteTemplate}
+        onSaveTemplate={addTemplate} onDeleteTemplate={deleteTemplate}
       />
       <DayBlock
-        label="Tomorrow"
-        date={tomorrow}
-        tasks={tomorrowTasks}
-        sections={tomorrowSections}
-        assignments={tomorrowAssignments}
+        label="Tomorrow" date={tomorrow}
+        tasks={tomorrowTasks} sections={tomorrowSections} assignments={tomorrowAssignments}
         templates={templates}
-        activeTaskId={activeTask?.id ?? null}
-        activeSectionDate={activeTaskDate}
-        overDayDate={overDayDate}
-        overSectionId={overSectionId}
-        onComplete={onComplete}
-        onTaskClick={onTaskClick}
+        activeItemId={activeItemId} overItemId={overItemId} overDayDate={overDayDate}
+        onComplete={onComplete} onTaskClick={onTaskClick}
         onAddSection={addSection}
         onRenameSection={(id, title) => updateSection(id, { title })}
         onDeleteSection={deleteSection}
-        onSaveTemplate={addTemplate}
-        onDeleteTemplate={deleteTemplate}
+        onSaveTemplate={addTemplate} onDeleteTemplate={deleteTemplate}
       />
 
       <DragOverlay>
         {activeTask && (
-          <TaskRow
-            task={activeTask}
-            onComplete={() => {}}
-            onTaskClick={() => {}}
-            overlay
-          />
+          <TaskRow task={activeTask} onComplete={() => {}} onTaskClick={() => {}} overlay />
         )}
       </DragOverlay>
     </DndContext>

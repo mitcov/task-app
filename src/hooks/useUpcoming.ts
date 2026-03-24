@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Task, DaySection, SectionAssignment, SectionTemplate } from '../types';
 import { api } from '../lib/api';
 import { format } from 'date-fns';
@@ -15,6 +15,7 @@ export function useUpcoming(tasks: Task[], onUpdateTaskDate: (id: string, date: 
   const [tomorrowAssignments, setTomorrowAssignments] = useState<SectionAssignment[]>([]);
   const [templates, setTemplates] = useState<SectionTemplate[]>([]);
   const [loading, setLoading] = useState(true);
+  const initialLoadRef = useRef(true);
 
   const today = format(new Date(), 'yyyy-MM-dd');
   const tomorrow = format(new Date(Date.now() + 86400000), 'yyyy-MM-dd');
@@ -35,7 +36,7 @@ export function useUpcoming(tasks: Task[], onUpdateTaskDate: (id: string, date: 
 
   const fetchUpcoming = useCallback(async () => {
     try {
-      setLoading(true);
+      if (initialLoadRef.current) setLoading(true);
       const [todayData, tomorrowData, templatesData] = await Promise.all([
         api.getUpcoming(today),
         api.getUpcoming(tomorrow),
@@ -46,6 +47,7 @@ export function useUpcoming(tasks: Task[], onUpdateTaskDate: (id: string, date: 
       setTodayAssignments(todayData.assignments);
       setTomorrowAssignments(tomorrowData.assignments);
       setTemplates(templatesData);
+      initialLoadRef.current = false;
     } catch (e) {
       console.error('Failed to load upcoming', e);
     } finally {
@@ -82,10 +84,7 @@ export function useUpcoming(tasks: Task[], onUpdateTaskDate: (id: string, date: 
     toDate: string,
     task: Task
   ) => {
-    // Remove assignment from old day
-    // Add assignment to new day (unsectioned)
     await api.assignToSection(taskId, null, toDate, 999);
-    // If task had an explicit due date, update it
     if (task.dueDate) {
       await onUpdateTaskDate(taskId, toDate);
     }
