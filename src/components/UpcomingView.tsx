@@ -19,6 +19,7 @@ import {
   verticalListSortingStrategy,
   useSortable,
   arrayMove,
+  SortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Task, DaySection, SectionAssignment, SectionTemplate } from '../types';
@@ -446,6 +447,47 @@ function extractOrdering(
   return { sectionUpdates, assignmentUpdates };
 }
 
+// ── Stable sorting strategy ───────────────────────────────────────────────────
+//
+// verticalListSortingStrategy breaks when the flat list contains nested items
+// (section header + its tasks share overlapping DOM rectangles). The strategy
+// computes transforms from measured positions, and overlapping rects produce
+// huge negative offsets that fling sections off-screen.
+//
+// This factory returns a strategy that:
+//  • Lets loose tasks shift relative to each other during a task drag (good UX)
+//  • Never shifts sections or section-internal items (no jumping)
+//  • Falls back to verticalListSortingStrategy when dragging a section
+//
+function makeDayStrategy(items: FlatItem[]): SortingStrategy {
+  return (args) => {
+    const activeItem = items[args.activeIndex];
+    const currentItem = items[args.index];
+    if (!activeItem || !currentItem) return null;
+
+    // Dragging a task: freeze sections and anything inside a section in place
+    if (activeItem.kind === 'task') {
+      if (
+        currentItem.kind === 'section' ||
+        currentItem.kind === 'dropzone' ||
+        (currentItem.kind === 'task' && currentItem.sectionId !== null)
+      ) {
+        return null;
+      }
+    }
+
+    // Dragging a section: freeze section-internal items in place
+    if (activeItem.kind === 'section') {
+      if (currentItem.kind === 'dropzone' ||
+          (currentItem.kind === 'task' && currentItem.sectionId !== null)) {
+        return null;
+      }
+    }
+
+    return verticalListSortingStrategy(args);
+  };
+}
+
 // ── Day Block ─────────────────────────────────────────────────────────────────
 
 function DayBlock({
@@ -476,6 +518,8 @@ function DayBlock({
   const flatItems = buildFlatItems(tasks, sections, assignments, date);
   const pending = flatItems.filter(i => i.kind === 'task' && i.task.status !== 'Done').length;
   const allIds = flatItems.map(i => i.id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const sortStrategy = React.useMemo(() => makeDayStrategy(flatItems), [allIds.join(',')]);
 
   // Day-level droppable so cross-day drags work even over empty space
   const { setNodeRef: setDayRef } = useDroppable({ id: `day-${date}` });
@@ -528,7 +572,7 @@ function DayBlock({
       </div>
 
       {!collapsed && (
-        <SortableContext items={allIds} strategy={verticalListSortingStrategy}>
+        <SortableContext items={allIds} strategy={sortStrategy}>
           {tasks.length === 0 && sections.length === 0 ? (
             <div className={`rounded-xl border-2 border-dashed p-4 text-center transition-colors
               ${isIncomingCrossDayDrop
