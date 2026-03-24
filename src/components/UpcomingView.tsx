@@ -19,7 +19,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { Task, DaySection, SectionAssignment, SectionTemplate } from '../types';
 import { useUpcoming } from '../hooks/useUpcoming';
 
-// ── Inline editable section title ─────────────────────────────────────────────
+// ── Section Header ────────────────────────────────────────────────────────────
 
 interface SectionHeaderProps {
   section: DaySection;
@@ -48,9 +48,8 @@ function SectionHeader({ section, onRename, onDelete }: SectionHeaderProps) {
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="mb-1 mt-4 first:mt-0">
-      {/* Section header row */}
-      <div className="flex items-center gap-2 mb-1">
+    <div ref={setNodeRef} style={style}>
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-200 dark:border-gray-700">
         <div {...attributes} {...listeners}
           className="text-gray-300 dark:text-gray-600 cursor-grab active:cursor-grabbing select-none px-1 touch-none">
           ⣿
@@ -83,23 +82,25 @@ function SectionHeader({ section, onRename, onDelete }: SectionHeaderProps) {
   );
 }
 
+// ── Section Drop Zone ─────────────────────────────────────────────────────────
+
 interface SectionDropZoneProps {
   sectionId: string;
   isOver: boolean;
 }
 
 function SectionDropZone({ sectionId, isOver }: SectionDropZoneProps) {
-  const { setNodeRef } = useSortable({ 
-    id: `dropzone-${sectionId}`, 
-    data: { type: 'dropzone', sectionId } 
+  const { setNodeRef } = useSortable({
+    id: `dropzone-${sectionId}`,
+    data: { type: 'dropzone', sectionId }
   });
 
   return (
     <div
       ref={setNodeRef}
-      className={`rounded-xl border-2 border-dashed p-3 mb-2 text-center transition-colors
-        ${isOver 
-          ? 'border-blue-400 bg-blue-50 dark:bg-blue-950' 
+      className={`rounded-xl border-2 border-dashed p-3 text-center transition-colors
+        ${isOver
+          ? 'border-blue-400 bg-blue-50 dark:bg-blue-950'
           : 'border-gray-200 dark:border-gray-700'}`}
     >
       <p className={`text-xs transition-colors ${isOver ? 'text-blue-500' : 'text-gray-300 dark:text-gray-600'}`}>
@@ -109,8 +110,7 @@ function SectionDropZone({ sectionId, isOver }: SectionDropZoneProps) {
   );
 }
 
-
-// ── Task row ──────────────────────────────────────────────────────────────────
+// ── Task Row ──────────────────────────────────────────────────────────────────
 
 interface TaskRowProps {
   task: Task;
@@ -296,10 +296,8 @@ function DayBlock({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  // Build ordered list of items (sections and loose tasks interleaved)
   const getAssignment = (taskId: string) => assignments.find(a => a.taskId === taskId);
 
-  // Sort tasks by their assignment sort_order, unsectioned at natural position
   const sortedItems = (): { type: 'section' | 'task'; id: string; sectionId: string | null; sortOrder: number }[] => {
     const items: { type: 'section' | 'task'; id: string; sectionId: string | null; sortOrder: number }[] = [];
 
@@ -310,7 +308,6 @@ function DayBlock({
       sectionTasks.forEach(t => items.push({ type: 'task', id: t.id, sectionId: s.id, sortOrder: getAssignment(t.id)?.sortOrder ?? 999 }));
     });
 
-    // Loose tasks (no assignment or assignment with null sectionId)
     const looseTasks = tasks.filter(t => {
       const a = getAssignment(t.id);
       return !a || a.sectionId === null;
@@ -333,19 +330,17 @@ function DayBlock({
     } else if (overData?.type === 'dropzone') {
       setOverSectionId(overData.sectionId);
     } else {
-      // Task being hovered — find its section
       const assignment = assignments.find(a => a.taskId === over.id);
       setOverSectionId(assignment?.sectionId ?? null);
     }
   };
 
-    const handleDragEnd = ({ active, over }: DragEndEvent) => {
-        setOverSectionId(null);
-        if (!over || active.id === over.id) return;
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    setOverSectionId(null);
+    if (!over || active.id === over.id) return;
 
     const activeIdStr = active.id as string;
     const overIdStr = over.id as string;
-
     const isSection = activeIdStr.startsWith('section-');
 
     if (isSection) {
@@ -362,8 +357,6 @@ function DayBlock({
       return;
     }
 
-    // Task drag — figure out new section and sort order
-    // Handle dropzone target
     if (overIdStr.startsWith('dropzone-')) {
       const targetSectionId = overIdStr.replace('dropzone-', '');
       const newAssignments = tasks.map((t, idx) => {
@@ -381,7 +374,6 @@ function DayBlock({
     const newSectionId = overItem?.type === 'section' ? overItem.id : overItem?.sectionId ?? null;
     const overIndex = items.findIndex(i => (i.type === 'section' ? `section-${i.id}` : i.id) === overIdStr);
 
-    // Rebuild assignments array with new position
     const newAssignments = tasks.map((t, idx) => {
       const a = getAssignment(t.id);
       if (t.id === activeIdStr) {
@@ -394,7 +386,8 @@ function DayBlock({
   };
 
   return (
-    <div className="mb-6">
+    <div className="mb-8">
+      {/* Day header */}
       <div className="flex items-center justify-between mb-3">
         <button onClick={() => setCollapsed(c => !c)} className="flex items-center gap-2">
           <h2 className="text-base font-bold text-gray-800 dark:text-white">{label}</h2>
@@ -415,7 +408,7 @@ function DayBlock({
       </div>
 
       {!collapsed && (
-        tasks.length === 0 ? (
+        tasks.length === 0 && sections.length === 0 ? (
           <p className="text-xs text-gray-400 dark:text-gray-600 italic py-2">Nothing scheduled</p>
         ) : (
           <DndContext
@@ -428,36 +421,50 @@ function DayBlock({
               items={[...allIds, ...sections.map(s => `dropzone-${s.id}`)]}
               strategy={verticalListSortingStrategy}
             >
-              {items.map(item => {
-                if (item.type === 'section') {
-                  const section = sections.find(s => s.id === item.id)!;
-                  const sectionTasks = tasks.filter(t => getAssignment(t.id)?.sectionId === section.id);
-                  return (
-                    <React.Fragment key={`section-${section.id}`}>
+              {/* Render sections with their tasks inside a visual container */}
+              {sections.map(section => {
+                const sectionTasks = tasks.filter(t => getAssignment(t.id)?.sectionId === section.id);
+                return (
+                  <div key={`section-block-${section.id}`} className="mb-4">
+                    <div className="bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
                       <SectionHeader
                         section={section}
                         onRename={onRenameSection}
                         onDelete={onDeleteSection}
                       />
-                      {sectionTasks.length === 0 && (
+                      <div className="p-3">
+                        {sectionTasks.map(task => (
+                          <TaskRow
+                            key={task.id}
+                            task={task}
+                            onComplete={onComplete}
+                            onTaskClick={onTaskClick}
+                          />
+                        ))}
                         <SectionDropZone
                           sectionId={section.id}
                           isOver={overSectionId === section.id}
                         />
-                      )}
-                    </React.Fragment>
-                  );
-                }
-                const task = tasks.find(t => t.id === item.id)!;
-                return (
-                  <TaskRow
-                    key={task.id}
-                    task={task}
-                    onComplete={onComplete}
-                    onTaskClick={onTaskClick}
-                  />
+                      </div>
+                    </div>
+                  </div>
                 );
               })}
+
+              {/* Loose tasks (not in any section) */}
+              {items
+                .filter(item => item.type === 'task' && !item.sectionId)
+                .map(item => {
+                  const task = tasks.find(t => t.id === item.id)!;
+                  return (
+                    <TaskRow
+                      key={task.id}
+                      task={task}
+                      onComplete={onComplete}
+                      onTaskClick={onTaskClick}
+                    />
+                  );
+                })}
             </SortableContext>
           </DndContext>
         )
@@ -466,7 +473,7 @@ function DayBlock({
   );
 }
 
-// ── UpcomingView ──────────────────────────────────────────────────────────────
+// ── Upcoming View ─────────────────────────────────────────────────────────────
 
 interface UpcomingViewProps {
   tasks: Task[];
