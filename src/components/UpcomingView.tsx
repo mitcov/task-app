@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   DndContext,
   pointerWithin,
@@ -472,8 +472,8 @@ function DayBlock({
   onDeleteTemplate: (id: string) => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
-  const pending = tasks.filter(t => t.status !== 'Done').length;
   const flatItems = buildFlatItems(tasks, sections, assignments, date);
+  const pending = flatItems.filter(i => i.kind === 'task' && i.task.status !== 'Done').length;
   const allIds = flatItems.map(i => i.id);
 
   const isActiveTask = !!(activeItemId && !activeItemId.startsWith('section-'));
@@ -629,6 +629,19 @@ export function UpcomingView({ tasks, onComplete, onTaskClick }: UpcomingViewPro
     moveTaskToDay, moveSectionToDay,
     addTemplate, deleteTemplate,
   } = useUpcoming(tasks);
+
+  // Update the PWA home screen badge whenever today's pending count changes
+  useEffect(() => {
+    if (!('setAppBadge' in navigator)) return;
+    const count = todayTasks.length; // getTasksForDay already excludes Done tasks
+    if (count > 0) {
+      (navigator as Navigator & { setAppBadge: (n: number) => Promise<void> })
+        .setAppBadge(count).catch(() => {});
+    } else {
+      (navigator as Navigator & { clearAppBadge: () => Promise<void> })
+        .clearAppBadge().catch(() => {});
+    }
+  }, [todayTasks.length]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
