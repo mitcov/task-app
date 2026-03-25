@@ -542,21 +542,25 @@ function computeLooseAssignments(
 // ── Day Block ─────────────────────────────────────────────────────────────────
 
 function DayBlock({
-  label, date, tasks, sections, assignments, templates,
-  activeItemId, activeItemDate, overItemId, overDayDate,
+  label, date, dayContainerId, tasks, sections, assignments, templates,
+  clonedDayLevel, clonedSectionTasks,
+  activeTask, activeSection, activeItemDate, overContainerDate,
   onComplete, onTaskClick, onAddSection, onRenameSection,
   onDeleteSection, onSaveTemplate, onDeleteTemplate,
 }: {
   label: string;
   date: string;
+  dayContainerId: string;
   tasks: Task[];
   sections: DaySection[];
   assignments: SectionAssignment[];
   templates: SectionTemplate[];
-  activeItemId: string | null;
+  clonedDayLevel: DayLevelEntry[] | null;
+  clonedSectionTasks: Map<string, Task[]> | null;
+  activeTask: Task | null;
+  activeSection: DaySection | null;
   activeItemDate: string | null;
-  overItemId: string | null;
-  overDayDate: string | null;
+  overContainerDate: string | null;
   onComplete: (id: string) => void;
   onTaskClick: (task: Task) => void;
   onAddSection: (date: string, title: string) => void;
@@ -566,40 +570,30 @@ function DayBlock({
   onDeleteTemplate: (id: string) => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
-  const flatItems = buildFlatItems(tasks, sections, assignments, date);
-  const pending = flatItems.filter(i => i.kind === 'task' && i.task.status !== 'Done').length;
-  const allIds = flatItems.map(i => i.id);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const sortStrategy = React.useMemo(() => makeDayStrategy(flatItems), [allIds.join(',')]);
+
+  // Use projected (cloned) state during drag, canonical state otherwise
+  const dayLevel = clonedDayLevel ?? buildDayLevel(tasks, sections, assignments);
+  const outerIds = dayLevel.map(e => e.kind === 'section' ? `section-${e.section.id}` : e.task.id);
 
   // Day-level droppable so cross-day drags work even over empty space
   const { setNodeRef: setDayRef } = useDroppable({ id: `day-${date}` });
 
-  const isActiveTask = !!(activeItemId && !activeItemId.startsWith('section-'));
-  const isActiveSection = !!(activeItemId && activeItemId.startsWith('section-'));
+  const isDragging = !!(activeTask || activeSection);
+  const isIncomingCrossDayDrop = isDragging && !!activeItemDate && activeItemDate !== date && overContainerDate === date;
+  const isOutgoingCrossDayDrag = !!activeTask && activeItemDate === date && overContainerDate !== null && overContainerDate !== date;
 
-  const isIncomingCrossDayDrop = !!(
-    (isActiveTask || isActiveSection) &&
-    activeItemDate && activeItemDate !== date && overDayDate === date
-  );
-  const isOutgoingCrossDayDrag = !!(
-    isActiveTask && activeItemDate === date && overDayDate !== null && overDayDate !== date
-  );
-
-  const getHoveredSectionId = (): string | null => {
-    if (!overItemId) return null;
-    if (overItemId.startsWith('dropzone-')) return overItemId.replace('dropzone-', '');
-    if (overItemId.startsWith('section-')) return overItemId.replace('section-', '');
-    const item = flatItems.find(i => i.id === overItemId);
-    if (item?.kind === 'task') return item.sectionId;
-    return null;
-  };
-  const hoveredSectionId = getHoveredSectionId();
-
-  // Is a task being hovered directly over a section header (not its dropzone)?
-  const taskHoveredSectionId = (isActiveTask && overItemId?.startsWith('section-'))
-    ? overItemId.replace('section-', '')
-    : null;
+  // Pending count across loose tasks + all section tasks in this day
+  const pending = dayLevel.reduce((count, e) => {
+    if (e.kind === 'task' && e.task.status !== 'Done') return count + 1;
+    if (e.kind === 'section') {
+      const canonical = tasks.filter(t =>
+        assignments.some(a => a.taskId === t.id && a.sectionId === e.section.id)
+      );
+      const projected = clonedSectionTasks?.get(e.section.id) ?? canonical;
+      return count + projected.filter(t => t.status !== 'Done').length;
+    }
+    return count;
+  }, 0);
 
   return (
     <div ref={setDayRef} className={`mb-8 transition-all duration-200 rounded-2xl p-1
@@ -623,8 +617,8 @@ function DayBlock({
       </div>
 
       {!collapsed && (
-        <SortableContext items={allIds} strategy={sortStrategy}>
-          {tasks.length === 0 && sections.length === 0 ? (
+        <SortableContext items={outerIds} strategy={verticalListSortingStrategy}>
+          {dayLevel.length === 0 ? (
             <div className={`rounded-xl border-2 border-dashed p-4 text-center transition-colors
               ${isIncomingCrossDayDrop
                 ? 'border-blue-400 bg-blue-50 dark:bg-blue-950'
@@ -635,17 +629,24 @@ function DayBlock({
             </div>
           ) : (
             <>
-              {flatItems.map(item => {
-                if (item.kind === 'section') {
+              {dayLevel.map(entry => {
+                if (entry.kind === 'section') {
+                  const canonical = tasks
+                    .filter(t => assignments.some(a => a.taskId === t.id && a.sectionId === entry.section.id))
+                    .sort((a, b) => {
+                      const aOrd = assignments.find(x => x.taskId === a.id)?.sortOrder ?? 999;
+                      const bOrd = assignments.find(x => x.taskId === b.id)?.sortOrder ?? 999;
+                      return aOrd - bOrd;
+                    });
+                  const projectedTasks = clonedSectionTasks?.get(entry.section.id) ?? canonical;
                   return (
                     <SortableSection
-                      key={item.id}
-                      section={item.section}
-                      flatItems={flatItems}
-                      isOver={hoveredSectionId === item.section.id}
-                      isTaskOver={taskHoveredSectionId === item.section.id}
-                      activeTaskId={isActiveTask ? activeItemId : null}
-                      activeItemId={overItemId}
+                      key={entry.section.id}
+                      section={entry.section}
+                      projectedTasks={projectedTasks}
+                      date={date}
+                      dayContainerId={dayContainerId}
+                      activeTask={activeTask}
                       onRename={onRenameSection}
                       onDelete={onDeleteSection}
                       onComplete={onComplete}
@@ -654,31 +655,22 @@ function DayBlock({
                   );
                 }
 
-                if (item.kind === 'task' && item.sectionId === null) {
-                  return (
-                    <TaskRow
-                      key={item.id}
-                      task={item.task}
-                      onComplete={onComplete}
-                      onTaskClick={onTaskClick}
-                    />
-                  );
-                }
-
-                if (item.kind === 'loose-zone') {
-                  return (
-                    <DropZone
-                      key={item.id}
-                      id={item.id}
-                      isOver={overItemId === item.id}
-                      label="Drop here to remove from section"
-                      active={!!isActiveTask}
-                    />
-                  );
-                }
-
-                return null;
+                // Loose task
+                return (
+                  <TaskRow
+                    key={entry.task.id}
+                    task={entry.task}
+                    containerId={dayContainerId}
+                    date={date}
+                    onComplete={onComplete}
+                    onTaskClick={onTaskClick}
+                  />
+                );
               })}
+
+              {sections.length > 0 && (
+                <LooseZoneDropZone date={date} active={!!activeTask} />
+              )}
 
               {isOutgoingCrossDayDrag && (
                 <div className="rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 p-3 text-center mt-2 opacity-40">
@@ -688,7 +680,7 @@ function DayBlock({
               {isIncomingCrossDayDrop && (
                 <div className="rounded-xl border-2 border-dashed border-blue-400 bg-blue-50 dark:bg-blue-950 p-3 text-center mt-2">
                   <p className="text-xs text-blue-500">
-                    Drop to {isActiveSection ? 'move section' : 'schedule'} in {label}
+                    Drop to {activeSection ? 'move section' : 'schedule'} in {label}
                   </p>
                 </div>
               )}
