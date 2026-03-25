@@ -109,7 +109,7 @@ async function initDB() {
         ALTER TABLE task_section_assignments ADD CONSTRAINT task_section_assignments_task_id_date_key UNIQUE (task_id, date);
       END IF;
     END $$;
-  `).catch(() => {}); -- table may not exist yet, handled above
+  `).catch(() => {}); // table may not exist yet, handled above
 
   // Add new columns if they don't exist yet (safe to run multiple times)
   await pool.query(`
