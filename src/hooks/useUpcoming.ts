@@ -8,7 +8,7 @@ const DAY_MAP: Record<string, number> = {
   Thursday: 4, Friday: 5, Saturday: 6,
 };
 
-export function useUpcoming(tasks: Task[]) {
+export function useUpcoming(tasks: Task[], userId: string) {
   const [todaySections, setTodaySections] = useState<DaySection[]>([]);
   const [tomorrowSections, setTomorrowSections] = useState<DaySection[]>([]);
   const [todayAssignments, setTodayAssignments] = useState<SectionAssignment[]>([]);
@@ -16,6 +16,16 @@ export function useUpcoming(tasks: Task[]) {
   const [templates, setTemplates] = useState<SectionTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const initialLoadRef = useRef(true);
+
+  // Clear stale state immediately when the user switches
+  useEffect(() => {
+    setTodaySections([]);
+    setTomorrowSections([]);
+    setTodayAssignments([]);
+    setTomorrowAssignments([]);
+    setTemplates([]);
+    initialLoadRef.current = true;
+  }, [userId]);
 
   const today = format(new Date(), 'yyyy-MM-dd');
   const tomorrow = format(new Date(Date.now() + 86400000), 'yyyy-MM-dd');
@@ -65,7 +75,7 @@ export function useUpcoming(tasks: Task[]) {
     } finally {
       setLoading(false);
     }
-  }, [today, tomorrow]);
+  }, [today, tomorrow, userId]);
 
   useEffect(() => { fetchUpcoming(); }, [fetchUpcoming]);
 

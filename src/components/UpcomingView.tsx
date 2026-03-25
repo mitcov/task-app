@@ -698,13 +698,14 @@ function DayBlock({
 
 interface UpcomingViewProps {
   tasks: Task[];
+  userId: string;
   onComplete: (id: string) => void;
   onTaskClick: (task: Task) => void;
   onUpdateTask: (id: string, updates: any) => void;
   onTodayPendingCount?: (count: number) => void;
 }
 
-export function UpcomingView({ tasks, onComplete, onTaskClick, onTodayPendingCount }: UpcomingViewProps) {
+export function UpcomingView({ tasks, userId, onComplete, onTaskClick, onTodayPendingCount }: UpcomingViewProps) {
   // ── Drag state ───────────────────────────────────────────────────────────
   const [clonedState, setClonedState] = useState<ClonedDragState | null>(null);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
@@ -724,7 +725,7 @@ export function UpcomingView({ tasks, onComplete, onTaskClick, onTodayPendingCou
     reorderDayItems, reorderAssignments,
     moveTaskToDay, moveSectionToDay,
     addTemplate, deleteTemplate,
-  } = useUpcoming(tasks);
+  } = useUpcoming(tasks, userId);
 
   // Report today's accurate pending count (used for tab badge + PWA badge)
   useEffect(() => {

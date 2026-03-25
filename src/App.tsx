@@ -113,6 +113,7 @@ function App() {
         <div className={tab === 'upcoming' ? '' : 'hidden'}>
           <UpcomingView
             tasks={tasks}
+            userId={user.id}
             onComplete={completeTask}
             onTaskClick={setEditingTask}
             onUpdateTask={updateTask}
