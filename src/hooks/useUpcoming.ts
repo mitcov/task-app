@@ -197,10 +197,11 @@ export function useUpcoming(tasks: Task[]) {
       setTo(prev => [...prev, { id: `opt-${taskId}`, taskId, sectionId: null, userId: '', date: toDate, sortOrder: newSortOrder }]);
     }
 
-    // API: delete source assignment (if existed), create target assignment
+    // API: delete source assignment (if existed), create target assignment.
+    // We delete by taskId+date rather than assignment ID to avoid stale optimistic IDs.
     try {
       await Promise.all([
-        existingFrom ? api.deleteAssignment(existingFrom.id) : Promise.resolve(),
+        existingFrom ? api.deleteAssignmentByTask(taskId, fromDate) : Promise.resolve(),
         api.assignToSection(taskId, null, toDate, newSortOrder),
       ]);
     } catch {

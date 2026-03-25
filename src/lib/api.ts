@@ -80,6 +80,9 @@ export const api = {
   deleteAssignment: async (id: string): Promise<void> => {
     await axios.delete(`${API_BASE}/section-assignments/${id}`);
   },
+  deleteAssignmentByTask: async (taskId: string, date: string): Promise<void> => {
+    await axios.delete(`${API_BASE}/section-assignments/by-task/${taskId}`, { params: { date } });
+  },
   reorderAssignments: async (assignments: { taskId: string; sectionId: string | null; date: string; sortOrder: number }[]): Promise<void> => {
     await axios.post(`${API_BASE}/section-assignments/reorder`, { assignments: assignments.map(a => ({ ...a, userId: currentUserId })) });
   },

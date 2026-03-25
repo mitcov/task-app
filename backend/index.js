@@ -70,7 +70,46 @@ async function initDB() {
       subscription JSONB NOT NULL,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS day_sections (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id TEXT NOT NULL,
+      date DATE NOT NULL,
+      title TEXT NOT NULL,
+      sort_order INTEGER DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS task_section_assignments (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      task_id UUID NOT NULL,
+      section_id UUID,
+      user_id TEXT NOT NULL,
+      date DATE NOT NULL,
+      sort_order INTEGER DEFAULT 999,
+      UNIQUE(task_id, date)
+    );
+
+    CREATE TABLE IF NOT EXISTS section_templates (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      sort_order INTEGER DEFAULT 0
+    );
   `);
+
+  // Add UNIQUE constraint on task_section_assignments if it was created without it
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'task_section_assignments_task_id_date_key'
+          AND conrelid = 'task_section_assignments'::regclass
+      ) THEN
+        ALTER TABLE task_section_assignments ADD CONSTRAINT task_section_assignments_task_id_date_key UNIQUE (task_id, date);
+      END IF;
+    END $$;
+  `).catch(() => {}); -- table may not exist yet, handled above
 
   // Add new columns if they don't exist yet (safe to run multiple times)
   await pool.query(`
@@ -604,6 +643,30 @@ app.post('/section-assignments/reorder', async (req, res) => {
       )
     );
     res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/section-assignments/by-task/:taskId', async (req, res) => {
+  try {
+    const { date } = req.query;
+    await pool.query(
+      'DELETE FROM task_section_assignments WHERE task_id = $1 AND date = $2',
+      [req.params.taskId, date]
+    );
+    res.status(204).end();
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/section-assignments/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM task_section_assignments WHERE id = $1', [req.params.id]);
+    res.status(204).end();
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: e.message });
