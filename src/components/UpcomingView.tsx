@@ -787,7 +787,7 @@ export function UpcomingView({ tasks, onComplete, onTaskClick, onTodayPendingCou
     activeContainerRef.current = overInfo.containerId;
   };
 
-  const handleDragEnd = async ({ active }: DragEndEvent) => {
+  const handleDragEnd = async ({ active, over }: DragEndEvent) => {
     const savedState = clonedState;
     const savedTask = activeTask;
     const savedSection = activeSection;
@@ -828,15 +828,23 @@ export function UpcomingView({ tasks, onComplete, onTaskClick, onTodayPendingCou
       return;
     }
 
-    // Same-day: commit full ordering from final clonedState
-    const todaySectionUpd = computeSectionUpdates(savedState.todayDayLevel);
-    const todayLooseUpd = computeLooseAssignments(savedState.todayDayLevel, today);
-    const tomorrowSectionUpd = computeSectionUpdates(savedState.tomorrowDayLevel);
-    const tomorrowLooseUpd = computeLooseAssignments(savedState.tomorrowDayLevel, tomorrow);
+    // For sections: handleDragOver skips live preview so savedState has the original order.
+    // Apply the final drop position now so section reorders persist.
+    let stateToCommit = savedState;
+    if (savedSection && over) {
+      const containerId = finalDate === today ? 'day-today' : 'day-tomorrow';
+      stateToCommit = applyDragOver(stateToCommit, active.id as string, over.id as string, containerId, containerId);
+    }
+
+    // Same-day: commit full ordering from final state
+    const todaySectionUpd = computeSectionUpdates(stateToCommit.todayDayLevel);
+    const todayLooseUpd = computeLooseAssignments(stateToCommit.todayDayLevel, today);
+    const tomorrowSectionUpd = computeSectionUpdates(stateToCommit.tomorrowDayLevel);
+    const tomorrowLooseUpd = computeLooseAssignments(stateToCommit.tomorrowDayLevel, tomorrow);
 
     const sectionTaskUpd: { taskId: string; sectionId: string; date: string; sortOrder: number }[] = [];
-    (Array.from(savedState.sectionTasks.entries()) as [string, Task[]][]).forEach(([sectionId, stasks]) => {
-      const sDate = savedState.todayDayLevel.some(e => e.kind === 'section' && e.section.id === sectionId)
+    (Array.from(stateToCommit.sectionTasks.entries()) as [string, Task[]][]).forEach(([sectionId, stasks]) => {
+      const sDate = stateToCommit.todayDayLevel.some(e => e.kind === 'section' && e.section.id === sectionId)
         ? today : tomorrow;
       stasks.forEach((t, idx) => sectionTaskUpd.push({ taskId: t.id, sectionId, date: sDate, sortOrder: idx }));
     });
