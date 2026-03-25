@@ -19,7 +19,6 @@ import {
   verticalListSortingStrategy,
   useSortable,
   arrayMove,
-  SortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Task, DaySection, SectionAssignment, SectionTemplate } from '../types';
@@ -27,11 +26,15 @@ import { useUpcoming } from '../hooks/useUpcoming';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type FlatItem =
-  | { kind: 'section'; id: string; section: DaySection }
-  | { kind: 'task'; id: string; task: Task; sectionId: string | null }
-  | { kind: 'dropzone'; id: string; sectionId: string }
-  | { kind: 'loose-zone'; id: string; date: string };
+type DayLevelEntry =
+  | { kind: 'task'; task: Task }
+  | { kind: 'section'; section: DaySection };
+
+type ClonedDragState = {
+  todayDayLevel: DayLevelEntry[];
+  tomorrowDayLevel: DayLevelEntry[];
+  sectionTasks: Map<string, Task[]>;
+};
 
 // ── Section Header ────────────────────────────────────────────────────────────
 
@@ -343,17 +346,13 @@ function AddSectionButton({ date, templates, onAdd, onSaveTemplate, onDeleteTemp
   );
 }
 
-// ── Build flat item list for a day ────────────────────────────────────────────
-// Sections and loose tasks are interleaved by their unified sortOrder.
-// On first load (before any reorder), sections and loose tasks may have
-// overlapping sortOrders; sections win ties so current behavior is preserved.
+// ── Day-level helpers ─────────────────────────────────────────────────────────
 
-function buildFlatItems(
+function buildDayLevel(
   tasks: Task[],
   sections: DaySection[],
   assignments: SectionAssignment[],
-  date: string
-): FlatItem[] {
+): DayLevelEntry[] {
   const getAssignment = (taskId: string) => assignments.find(a => a.taskId === taskId);
 
   const looseTasks = tasks.filter(t => {
@@ -361,131 +360,217 @@ function buildFlatItems(
     return !a || a.sectionId === null;
   });
 
-  type DayLevelItem =
+  type Raw =
     | { kind: 'section'; section: DaySection; order: number }
-    | { kind: 'loose'; task: Task; order: number };
+    | { kind: 'task'; task: Task; order: number };
 
-  const dayItems: DayLevelItem[] = [
+  const raw: Raw[] = [
     ...sections.map(s => ({ kind: 'section' as const, section: s, order: s.sortOrder })),
     ...looseTasks.map(t => {
       const a = getAssignment(t.id);
-      // Default high order so unassigned loose tasks appear after sections on first load
-      return { kind: 'loose' as const, task: t, order: a?.sortOrder ?? 9999 };
+      return { kind: 'task' as const, task: t, order: a?.sortOrder ?? 9999 };
     }),
   ];
 
-  // Stable sort: sections win ties with loose tasks
-  dayItems.sort((a, b) => {
-    if (a.order !== b.order) return a.order - b.order;
-    return a.kind === 'section' ? -1 : 1;
-  });
+  raw.sort((a, b) => a.order !== b.order ? a.order - b.order : a.kind === 'section' ? -1 : 1);
 
-  const items: FlatItem[] = [];
+  return raw.map(r => r.kind === 'section'
+    ? { kind: 'section', section: r.section }
+    : { kind: 'task', task: r.task });
+}
 
-  for (const item of dayItems) {
-    if (item.kind === 'section') {
-      items.push({ kind: 'section', id: `section-${item.section.id}`, section: item.section });
-
-      const sectionTasks = tasks
-        .filter(t => getAssignment(t.id)?.sectionId === item.section.id)
-        .sort((a, b) => (getAssignment(a.id)?.sortOrder ?? 999) - (getAssignment(b.id)?.sortOrder ?? 999));
-
-      sectionTasks.forEach(task => {
-        items.push({ kind: 'task', id: task.id, task, sectionId: item.section.id });
+function buildSectionTasksMap(
+  allSections: DaySection[],
+  allTasks: Task[],
+  allAssignments: SectionAssignment[],
+): Map<string, Task[]> {
+  const map = new Map<string, Task[]>();
+  for (const section of allSections) {
+    const tasks = allTasks
+      .filter(t => allAssignments.some(a => a.taskId === t.id && a.sectionId === section.id))
+      .sort((a, b) => {
+        const aOrd = allAssignments.find(x => x.taskId === a.id)?.sortOrder ?? 999;
+        const bOrd = allAssignments.find(x => x.taskId === b.id)?.sortOrder ?? 999;
+        return aOrd - bOrd;
       });
-
-      items.push({ kind: 'dropzone', id: `dropzone-${item.section.id}`, sectionId: item.section.id });
-    } else {
-      items.push({ kind: 'task', id: item.task.id, task: item.task, sectionId: null });
-    }
+    map.set(section.id, tasks);
   }
-
-  // Loose zone at the bottom so users can always drag tasks out of sections
-  if (sections.length > 0) {
-    items.push({ kind: 'loose-zone', id: `loose-${date}`, date });
-  }
-
-  return items;
+  return map;
 }
 
-// ── Extract new ordering from a reordered flat list ───────────────────────────
-// Returns section sortOrder updates and task assignment updates.
-// The section/loose-task sortOrders share the same numeric space (0, 1, 2, …).
-
-function extractOrdering(
-  flatItems: FlatItem[],
-  date: string,
-): {
-  sectionUpdates: { id: string; sortOrder: number }[];
-  assignmentUpdates: { taskId: string; sectionId: string | null; date: string; sortOrder: number }[];
-} {
-  const sectionUpdates: { id: string; sortOrder: number }[] = [];
-  const assignmentUpdates: { taskId: string; sectionId: string | null; date: string; sortOrder: number }[] = [];
-
-  let dayPos = 0;
-  let currentSectionId: string | null = null;
-  let sectionTaskPos = 0;
-
-  for (const item of flatItems) {
-    if (item.kind === 'section') {
-      currentSectionId = item.section.id;
-      sectionTaskPos = 0;
-      sectionUpdates.push({ id: item.section.id, sortOrder: dayPos++ });
-    } else if (item.kind === 'dropzone') {
-      currentSectionId = null;
-    } else if (item.kind === 'loose-zone') {
-      currentSectionId = null;
-    } else if (item.kind === 'task') {
-      if (currentSectionId !== null) {
-        assignmentUpdates.push({ taskId: item.task.id, sectionId: currentSectionId, date, sortOrder: sectionTaskPos++ });
-      } else {
-        assignmentUpdates.push({ taskId: item.task.id, sectionId: null, date, sortOrder: dayPos++ });
-      }
-    }
-  }
-
-  return { sectionUpdates, assignmentUpdates };
-}
-
-// ── Stable sorting strategy ───────────────────────────────────────────────────
-//
-// verticalListSortingStrategy breaks when the flat list contains nested items
-// (section header + its tasks share overlapping DOM rectangles). The strategy
-// computes transforms from measured positions, and overlapping rects produce
-// huge negative offsets that fling sections off-screen.
-//
-// This factory returns a strategy that:
-//  • Lets loose tasks shift relative to each other during a task drag (good UX)
-//  • Never shifts sections or section-internal items (no jumping)
-//  • Falls back to verticalListSortingStrategy when dragging a section
-//
-function makeDayStrategy(items: FlatItem[]): SortingStrategy {
-  return (args) => {
-    const activeItem = items[args.activeIndex];
-    const currentItem = items[args.index];
-    if (!activeItem || !currentItem) return null;
-
-    // Dragging a task: freeze sections and anything inside a section in place
-    if (activeItem.kind === 'task') {
-      if (
-        currentItem.kind === 'section' ||
-        currentItem.kind === 'dropzone' ||
-        (currentItem.kind === 'task' && currentItem.sectionId !== null)
-      ) {
-        return null;
-      }
-    }
-
-    // Dragging a section: freeze section-internal items in place
-    if (activeItem.kind === 'section') {
-      if (currentItem.kind === 'dropzone' ||
-          (currentItem.kind === 'task' && currentItem.sectionId !== null)) {
-        return null;
-      }
-    }
-
-    return verticalListSortingStrategy(args);
+function buildClonedState(
+  todayTasks: Task[], tomorrowTasks: Task[],
+  todaySections: DaySection[], tomorrowSections: DaySection[],
+  todayAssignments: SectionAssignment[], tomorrowAssignments: SectionAssignment[],
+): ClonedDragState {
+  return {
+    todayDayLevel: buildDayLevel(todayTasks, todaySections, todayAssignments),
+    tomorrowDayLevel: buildDayLevel(tomorrowTasks, tomorrowSections, tomorrowAssignments),
+    sectionTasks: buildSectionTasksMap(
+      [...todaySections, ...tomorrowSections],
+      [...todayTasks, ...tomorrowTasks],
+      [...todayAssignments, ...tomorrowAssignments],
+    ),
   };
+}
+
+function getDayLevel(state: ClonedDragState, containerId: string): DayLevelEntry[] | null {
+  if (containerId === 'day-today') return state.todayDayLevel;
+  if (containerId === 'day-tomorrow') return state.tomorrowDayLevel;
+  return null;
+}
+
+function withDayLevel(state: ClonedDragState, containerId: string, newLevel: DayLevelEntry[]): ClonedDragState {
+  if (containerId === 'day-today') return { ...state, todayDayLevel: newLevel };
+  if (containerId === 'day-tomorrow') return { ...state, tomorrowDayLevel: newLevel };
+  return state;
+}
+
+function getContainerForItem(
+  overId: string,
+  state: ClonedDragState,
+  today: string,
+  tomorrow: string,
+): { containerId: string; date: string } | null {
+  if (overId === `loose-${today}` || overId === `day-${today}`) return { containerId: 'day-today', date: today };
+  if (overId === `loose-${tomorrow}` || overId === `day-${tomorrow}`) return { containerId: 'day-tomorrow', date: tomorrow };
+
+  if (overId.startsWith('empty-')) {
+    const sectionId = overId.slice(6);
+    const date = state.todayDayLevel.some(e => e.kind === 'section' && e.section.id === sectionId) ? today : tomorrow;
+    return { containerId: sectionId, date };
+  }
+
+  if (overId.startsWith('section-')) {
+    const sectionId = overId.slice(8);
+    const date = state.todayDayLevel.some(e => e.kind === 'section' && e.section.id === sectionId) ? today : tomorrow;
+    return { containerId: sectionId, date };
+  }
+
+  for (const [sectionId, tasks] of Array.from(state.sectionTasks.entries())) {
+    if (tasks.some(t => t.id === overId)) {
+      const date = state.todayDayLevel.some(e => e.kind === 'section' && e.section.id === sectionId) ? today : tomorrow;
+      return { containerId: sectionId, date };
+    }
+  }
+
+  if (state.todayDayLevel.some(e => e.kind === 'task' && e.task.id === overId)) return { containerId: 'day-today', date: today };
+  if (state.tomorrowDayLevel.some(e => e.kind === 'task' && e.task.id === overId)) return { containerId: 'day-tomorrow', date: tomorrow };
+
+  return null;
+}
+
+function applyDragOver(
+  state: ClonedDragState,
+  activeId: string,
+  overId: string,
+  fromContainerId: string,
+  toContainerId: string,
+): ClonedDragState {
+  if (fromContainerId === toContainerId) {
+    // Same container: arrayMove
+    const dayLevel = getDayLevel(state, fromContainerId);
+    if (dayLevel) {
+      const ai = dayLevel.findIndex(e =>
+        (e.kind === 'task' && e.task.id === activeId) ||
+        (e.kind === 'section' && `section-${e.section.id}` === activeId));
+      const oi = dayLevel.findIndex(e =>
+        (e.kind === 'task' && e.task.id === overId) ||
+        (e.kind === 'section' && `section-${e.section.id}` === overId));
+      if (ai !== -1 && oi !== -1 && ai !== oi) return withDayLevel(state, fromContainerId, arrayMove(dayLevel, ai, oi));
+    } else {
+      const tasks = state.sectionTasks.get(fromContainerId);
+      if (tasks) {
+        const ai = tasks.findIndex(t => t.id === activeId);
+        const oi = tasks.findIndex(t => t.id === overId);
+        if (ai !== -1 && oi !== -1 && ai !== oi) {
+          const newMap = new Map(state.sectionTasks);
+          newMap.set(fromContainerId, arrayMove(tasks, ai, oi));
+          return { ...state, sectionTasks: newMap };
+        }
+      }
+    }
+    return state;
+  }
+
+  // Cross container: remove from source, insert at target
+  let newState = state;
+  let taskToMove: Task | null = null;
+  let entryToMove: DayLevelEntry | null = null;
+
+  const fromDay = getDayLevel(newState, fromContainerId);
+  if (fromDay) {
+    const idx = fromDay.findIndex(e =>
+      (e.kind === 'task' && e.task.id === activeId) ||
+      (e.kind === 'section' && `section-${e.section.id}` === activeId));
+    if (idx !== -1) {
+      entryToMove = fromDay[idx];
+      if (entryToMove.kind === 'task') taskToMove = entryToMove.task;
+      newState = withDayLevel(newState, fromContainerId, fromDay.filter((_, i) => i !== idx));
+    }
+  } else {
+    const tasks = newState.sectionTasks.get(fromContainerId);
+    if (tasks) {
+      const idx = tasks.findIndex(t => t.id === activeId);
+      if (idx !== -1) {
+        taskToMove = tasks[idx];
+        const newMap = new Map(newState.sectionTasks);
+        newMap.set(fromContainerId, tasks.filter((_, i) => i !== idx));
+        newState = { ...newState, sectionTasks: newMap };
+      }
+    }
+  }
+
+  if (!taskToMove && !entryToMove) return state;
+
+  const toDay = getDayLevel(newState, toContainerId);
+  if (toDay) {
+    const insertEntry: DayLevelEntry = entryToMove ?? { kind: 'task', task: taskToMove! };
+    let oi = toDay.findIndex(e =>
+      (e.kind === 'task' && e.task.id === overId) ||
+      (e.kind === 'section' && `section-${e.section.id}` === overId));
+    if (oi === -1) oi = toDay.length;
+    const newLevel = [...toDay];
+    newLevel.splice(oi, 0, insertEntry);
+    newState = withDayLevel(newState, toContainerId, newLevel);
+  } else {
+    if (!taskToMove) return state;
+    const toTasks = newState.sectionTasks.get(toContainerId) ?? [];
+    // Dropping onto section header → insert at 0; otherwise find position by task id
+    let oi = overId.startsWith('section-') ? 0 : toTasks.findIndex(t => t.id === overId);
+    if (oi === -1) oi = toTasks.length;
+    const newTasks = [...toTasks];
+    newTasks.splice(oi, 0, taskToMove);
+    const newMap = new Map(newState.sectionTasks);
+    newMap.set(toContainerId, newTasks);
+    newState = { ...newState, sectionTasks: newMap };
+  }
+
+  return newState;
+}
+
+// Shared-counter ordering: sections and loose tasks occupy the same sortOrder space.
+function computeSectionUpdates(dayLevel: DayLevelEntry[]): { id: string; sortOrder: number }[] {
+  const result: { id: string; sortOrder: number }[] = [];
+  let pos = 0;
+  for (const e of dayLevel) {
+    if (e.kind === 'section') result.push({ id: e.section.id, sortOrder: pos });
+    pos++;
+  }
+  return result;
+}
+
+function computeLooseAssignments(
+  dayLevel: DayLevelEntry[],
+  date: string,
+): { taskId: string; sectionId: null; date: string; sortOrder: number }[] {
+  const result: { taskId: string; sectionId: null; date: string; sortOrder: number }[] = [];
+  let pos = 0;
+  for (const e of dayLevel) {
+    if (e.kind === 'task') result.push({ taskId: e.task.id, sectionId: null, date, sortOrder: pos });
+    pos++;
+  }
+  return result;
 }
 
 // ── Day Block ─────────────────────────────────────────────────────────────────
