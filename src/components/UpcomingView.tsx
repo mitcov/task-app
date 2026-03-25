@@ -36,94 +36,10 @@ type ClonedDragState = {
   sectionTasks: Map<string, Task[]>;
 };
 
-// ── Section Header ────────────────────────────────────────────────────────────
+// ── Section Empty Drop Zone ───────────────────────────────────────────────────
 
-function SectionHeader({
-  section, onRename, onDelete, dragHandleProps,
-}: {
-  section: DaySection;
-  onRename: (id: string, title: string) => void;
-  onDelete: (id: string) => void;
-  dragHandleProps: any;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [title, setTitle] = useState(section.title);
-
-  const handleBlur = () => {
-    setEditing(false);
-    if (title.trim() && title !== section.title) onRename(section.id, title.trim());
-  };
-
-  return (
-    <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-200 dark:border-gray-700">
-      <div {...dragHandleProps}
-        className="text-gray-300 dark:text-gray-600 cursor-grab active:cursor-grabbing select-none px-1 touch-none">
-        ⣿
-      </div>
-      {editing ? (
-        <input
-          autoFocus
-          value={title}
-          onChange={e => setTitle(e.target.value)}
-          onBlur={handleBlur}
-          onKeyDown={e => { if (e.key === 'Enter') handleBlur(); }}
-          className="flex-1 text-sm font-semibold bg-transparent border-b border-blue-400 outline-none text-gray-700 dark:text-gray-300 py-0.5"
-        />
-      ) : (
-        <button onClick={() => setEditing(true)}
-          className="flex-1 text-left text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-          {section.title}
-        </button>
-      )}
-      <button onClick={() => onDelete(section.id)}
-        className="text-gray-200 dark:text-gray-700 hover:text-red-400 text-base flex-shrink-0 pl-3">
-        ×
-      </button>
-    </div>
-  );
-}
-
-// ── Section Container ─────────────────────────────────────────────────────────
-
-function SectionContainer({
-  section, isOver, isTaskOver, onRename, onDelete, children, dragHandleProps, isDraggingSection,
-}: {
-  section: DaySection;
-  isOver: boolean;
-  isTaskOver: boolean;
-  onRename: (id: string, title: string) => void;
-  onDelete: (id: string) => void;
-  children: React.ReactNode;
-  dragHandleProps: any;
-  isDraggingSection: boolean;
-}) {
-  return (
-    <div className={`bg-gray-50 dark:bg-gray-900 rounded-2xl border-2 transition-colors duration-150 mb-1
-      ${isOver || isTaskOver ? 'border-blue-300 dark:border-blue-700' : 'border-gray-200 dark:border-gray-700'}
-      ${isDraggingSection ? 'opacity-30' : ''}`}>
-      <SectionHeader
-        section={section}
-        onRename={onRename}
-        onDelete={onDelete}
-        dragHandleProps={dragHandleProps}
-      />
-      <div className="px-3 pt-2 pb-2">
-        {children}
-      </div>
-    </div>
-  );
-}
-
-// ── Drop Zone ─────────────────────────────────────────────────────────────────
-
-function DropZone({ id, isOver, label, active }: {
-  id: string;
-  isOver: boolean;
-  label: string;
-  active: boolean;
-}) {
-  const { setNodeRef } = useSortable({ id, data: { type: 'dropzone', id } });
-
+function SectionEmptyDropZone({ sectionId, active }: { sectionId: string; active: boolean }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `empty-${sectionId}` });
   return (
     <div
       ref={setNodeRef}
@@ -135,8 +51,31 @@ function DropZone({ id, isOver, label, active }: {
           : 'p-0 opacity-0 mb-0 border-transparent pointer-events-none h-0'}`}
     >
       {active && (
-        <p className={`text-xs transition-colors ${isOver ? 'text-blue-500' : 'text-gray-400 dark:text-gray-500'}`}>
-          {isOver ? label : '·'}
+        <p className={`text-xs ${isOver ? 'text-blue-500' : 'text-gray-400 dark:text-gray-500'}`}>
+          {isOver ? 'Drop here' : '·'}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ── Loose Zone Drop Target ────────────────────────────────────────────────────
+
+function LooseZoneDropZone({ date, active }: { date: string; active: boolean }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `loose-${date}` });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`rounded-xl border-2 border-dashed text-center transition-all duration-200 overflow-hidden
+        ${active
+          ? isOver
+            ? 'border-blue-400 bg-blue-50 dark:bg-blue-950 p-3 opacity-100'
+            : 'border-gray-300 dark:border-gray-600 p-2 opacity-60'
+          : 'p-0 opacity-0 border-transparent pointer-events-none h-0'}`}
+    >
+      {active && (
+        <p className={`text-xs ${isOver ? 'text-blue-500' : 'text-gray-400 dark:text-gray-500'}`}>
+          {isOver ? 'Drop here to remove from section' : '·'}
         </p>
       )}
     </div>
@@ -145,14 +84,16 @@ function DropZone({ id, isOver, label, active }: {
 
 // ── Task Row ──────────────────────────────────────────────────────────────────
 
-function TaskRow({ task, onComplete, onTaskClick, overlay }: {
+function TaskRow({ task, containerId, date, onComplete, onTaskClick, overlay }: {
   task: Task;
+  containerId: string;
+  date: string;
   onComplete: (id: string) => void;
   onTaskClick: (task: Task) => void;
   overlay?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: task.id, data: { type: 'task', taskId: task.id } });
+    useSortable({ id: task.id, data: { type: 'task', taskId: task.id, containerId, date } });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -196,61 +137,86 @@ function TaskRow({ task, onComplete, onTaskClick, overlay }: {
 // ── Sortable Section ──────────────────────────────────────────────────────────
 
 function SortableSection({
-  section, flatItems, isOver, isTaskOver, activeTaskId, activeItemId,
+  section, projectedTasks, date, dayContainerId, activeTask,
   onRename, onDelete, onComplete, onTaskClick,
 }: {
   section: DaySection;
-  flatItems: FlatItem[];
-  isOver: boolean;
-  isTaskOver: boolean;
-  activeTaskId: string | null;
-  activeItemId: string | null;
+  projectedTasks: Task[];
+  date: string;
+  dayContainerId: string;
+  activeTask: Task | null;
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
   onComplete: (id: string) => void;
   onTaskClick: (task: Task) => void;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(section.title);
+
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: `section-${section.id}`, data: { type: 'section', sectionId: section.id } });
+    useSortable({ id: `section-${section.id}`, data: { type: 'section', sectionId: section.id, containerId: dayContainerId, date } });
 
   const style = { transform: CSS.Transform.toString(transform), transition };
 
-  const sectionTaskItems = flatItems.filter(
-    i => i.kind === 'task' && i.sectionId === section.id
-  ) as Extract<FlatItem, { kind: 'task' }>[];
+  // Highlights when the active task is currently projected inside this section
+  const isOver = !!activeTask && projectedTasks.some(t => t.id === activeTask.id);
+  const taskIds = projectedTasks.map(t => t.id);
 
-  const dropzoneItem = flatItems.find(
-    i => i.kind === 'dropzone' && i.sectionId === section.id
-  );
+  const handleBlur = () => {
+    setEditing(false);
+    if (title.trim() && title !== section.title) onRename(section.id, title.trim());
+  };
 
   return (
-    <div ref={setNodeRef} style={style} className="mb-3">
-      <SectionContainer
-        section={section}
-        isOver={isOver}
-        isTaskOver={isTaskOver}
-        onRename={onRename}
-        onDelete={onDelete}
-        dragHandleProps={{ ...attributes, ...listeners }}
-        isDraggingSection={isDragging}
-      >
-        {sectionTaskItems.map(item => (
-          <TaskRow
-            key={item.task.id}
-            task={item.task}
-            onComplete={onComplete}
-            onTaskClick={onTaskClick}
-          />
-        ))}
-        {dropzoneItem && (
-          <DropZone
-            id={dropzoneItem.id}
-            isOver={activeItemId === null ? false : isOver}
-            label="Drop here"
-            active={!!activeTaskId}
-          />
-        )}
-      </SectionContainer>
+    <div style={style} className="mb-3">
+      <div className={`bg-gray-50 dark:bg-gray-900 rounded-2xl border-2 transition-colors duration-150
+        ${isOver ? 'border-blue-300 dark:border-blue-700' : 'border-gray-200 dark:border-gray-700'}
+        ${isDragging ? 'opacity-30' : ''}`}>
+        {/* Header gets setNodeRef — only ~48px tall, no overlap with inner tasks */}
+        <div ref={setNodeRef} className="flex items-center gap-2 px-3 py-2 border-b border-gray-200 dark:border-gray-700">
+          <div {...attributes} {...listeners}
+            className="text-gray-300 dark:text-gray-600 cursor-grab active:cursor-grabbing select-none px-1 touch-none">
+            ⣿
+          </div>
+          {editing ? (
+            <input
+              autoFocus
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              onBlur={handleBlur}
+              onKeyDown={e => { if (e.key === 'Enter') handleBlur(); }}
+              className="flex-1 text-sm font-semibold bg-transparent border-b border-blue-400 outline-none text-gray-700 dark:text-gray-300 py-0.5"
+            />
+          ) : (
+            <button onClick={() => setEditing(true)}
+              className="flex-1 text-left text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+              {section.title}
+            </button>
+          )}
+          <button onClick={() => onDelete(section.id)}
+            className="text-gray-200 dark:text-gray-700 hover:text-red-400 text-base flex-shrink-0 pl-3">
+            ×
+          </button>
+        </div>
+        {/* Inner SortableContext — geometry fully isolated from the outer context */}
+        <div className="px-3 pt-2 pb-2">
+          <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
+            {projectedTasks.map(task => (
+              <TaskRow
+                key={task.id}
+                task={task}
+                containerId={section.id}
+                date={date}
+                onComplete={onComplete}
+                onTaskClick={onTaskClick}
+              />
+            ))}
+            {projectedTasks.length === 0 && (
+              <SectionEmptyDropZone sectionId={section.id} active={!!activeTask} />
+            )}
+          </SortableContext>
+        </div>
+      </div>
     </div>
   );
 }
