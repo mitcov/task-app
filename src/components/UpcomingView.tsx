@@ -1,7 +1,8 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   DndContext,
   pointerWithin,
+  closestCenter,
   PointerSensor,
   TouchSensor,
   KeyboardSensor,
@@ -10,6 +11,7 @@ import {
   DragEndEvent,
   DragStartEvent,
   DragOverEvent,
+  DragCancelEvent,
   DragOverlay,
   useDroppable,
 } from '@dnd-kit/core';
@@ -703,12 +705,14 @@ interface UpcomingViewProps {
 }
 
 export function UpcomingView({ tasks, onComplete, onTaskClick, onTodayPendingCount }: UpcomingViewProps) {
+  // ── Drag state ───────────────────────────────────────────────────────────
+  const [clonedState, setClonedState] = useState<ClonedDragState | null>(null);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [activeSection, setActiveSection] = useState<DaySection | null>(null);
-  const [activeItemId, setActiveItemId] = useState<string | null>(null);
   const [activeItemDate, setActiveItemDate] = useState<string | null>(null);
-  const [overItemId, setOverItemId] = useState<string | null>(null);
-  const [overDayDate, setOverDayDate] = useState<string | null>(null);
+  const [overContainerDate, setOverContainerDate] = useState<string | null>(null);
+  // Synchronous ref for current active container (avoids stale closure in onDragOver)
+  const activeContainerRef = useRef<string | null>(null);
 
   const {
     today, tomorrow,
@@ -728,161 +732,135 @@ export function UpcomingView({ tasks, onComplete, onTaskClick, onTodayPendingCou
   }, [todayTasks.length, onTodayPendingCount]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  const allAssignments = React.useMemo(
-    () => [...todayAssignments, ...tomorrowAssignments],
-    [todayAssignments, tomorrowAssignments]
-  );
-
-  const getDateForItem = useCallback((itemId: string): string | null => {
-    if (!itemId) return null;
-    const sectionId = itemId.startsWith('section-') ? itemId.replace('section-', '') : null;
-    const dropzoneId = itemId.startsWith('dropzone-') ? itemId.replace('dropzone-', '') : null;
-    const looseDate = itemId.startsWith('loose-') ? itemId.replace('loose-', '') : null;
-    const dayDate = itemId.startsWith('day-') ? itemId.replace('day-', '') : null;
-
-    if (looseDate) return looseDate;
-    if (dayDate) return dayDate;
-    if (sectionId) {
-      if (todaySections.some(s => s.id === sectionId)) return today;
-      if (tomorrowSections.some(s => s.id === sectionId)) return tomorrow;
-    }
-    if (dropzoneId) {
-      if (todaySections.some(s => s.id === dropzoneId)) return today;
-      if (tomorrowSections.some(s => s.id === dropzoneId)) return tomorrow;
-    }
-    const assignment = allAssignments.find(a => a.taskId === itemId);
-    if (assignment) return assignment.date;
-    if (todayTasks.some(t => t.id === itemId)) return today;
-    if (tomorrowTasks.some(t => t.id === itemId)) return tomorrow;
-    return null;
-  }, [today, tomorrow, todaySections, tomorrowSections, todayTasks, tomorrowTasks, allAssignments]);
+  // ── Drag handlers ────────────────────────────────────────────────────────
 
   const handleDragStart = ({ active }: DragStartEvent) => {
     const id = active.id as string;
-    setActiveItemId(id);
-    setActiveItemDate(getDateForItem(id));
+    const containerId = active.data.current?.containerId as string | undefined;
+    const date = active.data.current?.date as string | undefined;
+
+    setActiveItemDate(date ?? null);
+    activeContainerRef.current = containerId ?? null;
 
     if (id.startsWith('section-')) {
       const sectionId = id.replace('section-', '');
       const section = [...todaySections, ...tomorrowSections].find(s => s.id === sectionId);
       if (section) setActiveSection(section);
     } else {
-      const task = tasks.find(t => t.id === id);
+      const task = [...todayTasks, ...tomorrowTasks].find(t => t.id === id);
       if (task) setActiveTask(task);
     }
+
+    setClonedState(buildClonedState(
+      todayTasks, tomorrowTasks,
+      todaySections, tomorrowSections,
+      todayAssignments, tomorrowAssignments,
+    ));
   };
 
-  const handleDragOver = ({ over }: DragOverEvent) => {
-    if (!over) { setOverItemId(null); setOverDayDate(null); return; }
+  const handleDragOver = ({ active, over }: DragOverEvent) => {
+    // Sections don't need live preview — they use CSS transforms via useSortable
+    if (activeSection || active.id.toString().startsWith('section-')) return;
+    if (!over || !clonedState) { setOverContainerDate(null); return; }
+
+    const activeId = active.id as string;
     const overId = over.id as string;
-    setOverItemId(overId);
-    setOverDayDate(getDateForItem(overId));
+
+    const overInfo = getContainerForItem(overId, clonedState, today, tomorrow);
+    if (!overInfo) { setOverContainerDate(null); return; }
+
+    setOverContainerDate(overInfo.date);
+
+    const fromContainerId = activeContainerRef.current;
+    if (!fromContainerId) return;
+
+    setClonedState(prev => prev
+      ? applyDragOver(prev, activeId, overId, fromContainerId, overInfo.containerId)
+      : prev
+    );
+    // Update synchronously so next onDragOver sees the new container
+    activeContainerRef.current = overInfo.containerId;
   };
 
-  const handleDragEnd = async ({ active, over }: DragEndEvent) => {
-    const prevActiveId = activeItemId;
-    const prevActiveDate = activeItemDate;
-    const prevTask = activeTask;
+  const handleDragEnd = async ({ active }: DragEndEvent) => {
+    const savedState = clonedState;
+    const savedTask = activeTask;
+    const savedSection = activeSection;
+    const savedOriginalDate = activeItemDate;
+    const savedFinalContainerId = activeContainerRef.current;
 
+    // Clear all drag state immediately
+    setClonedState(null);
     setActiveTask(null);
     setActiveSection(null);
-    setActiveItemId(null);
     setActiveItemDate(null);
-    setOverItemId(null);
-    setOverDayDate(null);
+    setOverContainerDate(null);
+    activeContainerRef.current = null;
 
-    if (!over || !prevActiveId) {
-      // Released in empty space — if we were hovering over the other day, still do the cross-day move
-      if (overDayDate && overDayDate !== prevActiveDate && prevTask) {
-        await moveTaskToDay(prevActiveId!, prevActiveDate!, overDayDate);
-      }
+    if (!savedState || !savedOriginalDate) return;
+
+    // Determine the final date from the final containerId
+    let finalDate: string;
+    if (savedFinalContainerId === 'day-today') {
+      finalDate = today;
+    } else if (savedFinalContainerId === 'day-tomorrow') {
+      finalDate = tomorrow;
+    } else if (savedFinalContainerId) {
+      // Section container — look up which day it's in
+      finalDate = savedState.todayDayLevel.some(e => e.kind === 'section' && e.section.id === savedFinalContainerId)
+        ? today : tomorrow;
+    } else {
+      finalDate = savedOriginalDate;
+    }
+
+    // Cross-day moves
+    if (savedSection && finalDate !== savedOriginalDate) {
+      await moveSectionToDay(savedSection.id, savedOriginalDate, finalDate);
       return;
     }
-    const overIdStr = over.id as string;
-    if (prevActiveId === overIdStr) return;
-
-    const targetDate = getDateForItem(overIdStr) || prevActiveDate;
-    if (!targetDate || !prevActiveDate) return;
-
-    // ── Section drag ──────────────────────────────────────────────────────────
-    if (prevActiveId.startsWith('section-')) {
-      const activeSectionId = prevActiveId.replace('section-', '');
-
-      // Cross-day section move
-      if (targetDate !== prevActiveDate) {
-        await moveSectionToDay(activeSectionId, prevActiveDate, targetDate);
-        return;
-      }
-
-      // Same-day section reorder (may now be relative to loose tasks too)
-      const dayTasks = prevActiveDate === today ? todayTasks : tomorrowTasks;
-      const dayAssignments = prevActiveDate === today ? todayAssignments : tomorrowAssignments;
-      const daySections = prevActiveDate === today ? todaySections : tomorrowSections;
-      const flatItems = buildFlatItems(dayTasks, daySections, dayAssignments, prevActiveDate);
-      const allIds = flatItems.map(i => i.id);
-
-      const activeIdx = allIds.indexOf(prevActiveId);
-      let overIdx = allIds.indexOf(overIdStr);
-      if (activeIdx === -1 || overIdx === -1) return;
-
-      // When dropping on items inside a section, map to the section header
-      if (overIdStr.startsWith('dropzone-')) {
-        overIdx = allIds.indexOf(`section-${overIdStr.replace('dropzone-', '')}`);
-      }
-      const newFlat = arrayMove(flatItems, activeIdx, overIdx < 0 ? overIdx : overIdx);
-      const { sectionUpdates, assignmentUpdates } = extractOrdering(newFlat, prevActiveDate);
-
-      // Split: sectionUpdates go to reorderDayItems, task sectionId changes go to reorderAssignments
-      const looseUpdates = assignmentUpdates.filter(a => a.sectionId === null);
-      const sectionTaskUpdates = assignmentUpdates.filter(a => a.sectionId !== null);
-
-      const saves: Promise<unknown>[] = [];
-      if (sectionUpdates.length > 0 || looseUpdates.length > 0) {
-        saves.push(reorderDayItems(prevActiveDate, sectionUpdates, looseUpdates));
-      }
-      if (sectionTaskUpdates.length > 0) {
-        saves.push(reorderAssignments(sectionTaskUpdates));
-      }
-      await Promise.all(saves);
+    if (savedTask && finalDate !== savedOriginalDate) {
+      await moveTaskToDay(savedTask.id, savedOriginalDate, finalDate);
       return;
     }
 
-    // ── Cross-day task move ───────────────────────────────────────────────────
-    if (targetDate !== prevActiveDate) {
-      if (prevTask) await moveTaskToDay(prevActiveId, prevActiveDate, targetDate);
-      return;
-    }
+    // Same-day: commit full ordering from final clonedState
+    const todaySectionUpd = computeSectionUpdates(savedState.todayDayLevel);
+    const todayLooseUpd = computeLooseAssignments(savedState.todayDayLevel, today);
+    const tomorrowSectionUpd = computeSectionUpdates(savedState.tomorrowDayLevel);
+    const tomorrowLooseUpd = computeLooseAssignments(savedState.tomorrowDayLevel, tomorrow);
 
-    // ── Same-day task reorder / section assignment ────────────────────────────
-    const dayTasks = targetDate === today ? todayTasks : tomorrowTasks;
-    const dayAssignments = targetDate === today ? todayAssignments : tomorrowAssignments;
-    const daySections = targetDate === today ? todaySections : tomorrowSections;
-    const flatItems = buildFlatItems(dayTasks, daySections, dayAssignments, targetDate);
-    const allIds = flatItems.map(i => i.id);
-
-    const activeIdx = allIds.indexOf(prevActiveId);
-    const overIdx = allIds.indexOf(overIdStr);
-    if (activeIdx === -1 || overIdx === -1) return;
-
-    const newFlat = arrayMove(flatItems, activeIdx, overIdx);
-    const { sectionUpdates, assignmentUpdates } = extractOrdering(newFlat, targetDate);
-
-    const looseUpdates = assignmentUpdates.filter(a => a.sectionId === null);
-    const sectionTaskUpdates = assignmentUpdates.filter(a => a.sectionId !== null);
+    const sectionTaskUpd: { taskId: string; sectionId: string; date: string; sortOrder: number }[] = [];
+    (Array.from(savedState.sectionTasks.entries()) as [string, Task[]][]).forEach(([sectionId, stasks]) => {
+      const sDate = savedState.todayDayLevel.some(e => e.kind === 'section' && e.section.id === sectionId)
+        ? today : tomorrow;
+      stasks.forEach((t, idx) => sectionTaskUpd.push({ taskId: t.id, sectionId, date: sDate, sortOrder: idx }));
+    });
 
     const saves: Promise<unknown>[] = [];
-    if (sectionUpdates.length > 0 || looseUpdates.length > 0) {
-      saves.push(reorderDayItems(targetDate, sectionUpdates, looseUpdates));
+    if (todaySectionUpd.length > 0 || todayLooseUpd.length > 0) {
+      saves.push(reorderDayItems(today, todaySectionUpd, todayLooseUpd));
     }
-    if (sectionTaskUpdates.length > 0) {
-      saves.push(reorderAssignments(sectionTaskUpdates));
+    if (tomorrowSectionUpd.length > 0 || tomorrowLooseUpd.length > 0) {
+      saves.push(reorderDayItems(tomorrow, tomorrowSectionUpd, tomorrowLooseUpd));
+    }
+    if (sectionTaskUpd.length > 0) {
+      saves.push(reorderAssignments(sectionTaskUpd));
     }
     await Promise.all(saves);
+  };
+
+  const handleDragCancel = (_e: DragCancelEvent) => {
+    setClonedState(null);
+    setActiveTask(null);
+    setActiveSection(null);
+    setActiveItemDate(null);
+    setOverContainerDate(null);
+    activeContainerRef.current = null;
   };
 
   if (loading) return (
@@ -892,17 +870,23 @@ export function UpcomingView({ tasks, onComplete, onTaskClick, onTodayPendingCou
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={pointerWithin}
+      collisionDetection={(args) => {
+        const hits = pointerWithin(args);
+        return hits.length ? hits : closestCenter(args);
+      }}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
     >
       <DayBlock
-        label="Today" date={today}
+        label="Today" date={today} dayContainerId="day-today"
         tasks={todayTasks} sections={todaySections} assignments={todayAssignments}
         templates={templates}
-        activeItemId={activeItemId} activeItemDate={activeItemDate}
-        overItemId={overItemId} overDayDate={overDayDate}
+        clonedDayLevel={clonedState?.todayDayLevel ?? null}
+        clonedSectionTasks={clonedState?.sectionTasks ?? null}
+        activeTask={activeTask} activeSection={activeSection}
+        activeItemDate={activeItemDate} overContainerDate={overContainerDate}
         onComplete={onComplete} onTaskClick={onTaskClick}
         onAddSection={addSection}
         onRenameSection={(id, title) => updateSection(id, { title })}
@@ -910,11 +894,13 @@ export function UpcomingView({ tasks, onComplete, onTaskClick, onTodayPendingCou
         onSaveTemplate={addTemplate} onDeleteTemplate={deleteTemplate}
       />
       <DayBlock
-        label="Tomorrow" date={tomorrow}
+        label="Tomorrow" date={tomorrow} dayContainerId="day-tomorrow"
         tasks={tomorrowTasks} sections={tomorrowSections} assignments={tomorrowAssignments}
         templates={templates}
-        activeItemId={activeItemId} activeItemDate={activeItemDate}
-        overItemId={overItemId} overDayDate={overDayDate}
+        clonedDayLevel={clonedState?.tomorrowDayLevel ?? null}
+        clonedSectionTasks={clonedState?.sectionTasks ?? null}
+        activeTask={activeTask} activeSection={activeSection}
+        activeItemDate={activeItemDate} overContainerDate={overContainerDate}
         onComplete={onComplete} onTaskClick={onTaskClick}
         onAddSection={addSection}
         onRenameSection={(id, title) => updateSection(id, { title })}
@@ -924,7 +910,7 @@ export function UpcomingView({ tasks, onComplete, onTaskClick, onTodayPendingCou
 
       <DragOverlay>
         {activeTask && (
-          <TaskRow task={activeTask} onComplete={() => {}} onTaskClick={() => {}} overlay />
+          <TaskRow task={activeTask} containerId="" date="" onComplete={() => {}} onTaskClick={() => {}} overlay />
         )}
         {activeSection && (
           <SectionGhost section={activeSection} />
