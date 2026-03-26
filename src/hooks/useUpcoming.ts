@@ -57,6 +57,7 @@ export function useUpcoming(tasks: Task[], userId: string) {
   }, [tasks]);
 
   const fetchUpcoming = useCallback(async () => {
+    if (!userId) return;
     try {
       if (initialLoadRef.current) setLoading(true);
       const [todayData, tomorrowData, templatesData] = await Promise.all([
