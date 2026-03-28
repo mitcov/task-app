@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useTasks } from './hooks/useTasks';
 import { useUser } from './hooks/useUser';
+import { useTheme } from './hooks/useTheme';
 import { CategoryBoard } from './components/CategoryBoard';
 import { TaskModal } from './components/TaskModal';
 import { CategoryEditModal } from './components/CategoryEditModal';
 import { UpcomingView } from './components/UpcomingView';
 import { CompletedView } from './components/CompletedView';
 import { ProfileScreen } from './components/ProfileScreen';
+import { UserMenu } from './components/UserMenu';
 import { Task, Category } from './types';
 import { setCurrentUser } from './lib/api';
 import { registerPushNotifications } from './lib/push';
@@ -16,6 +18,7 @@ type Tab = 'upcoming' | 'all' | 'done';
 
 function App() {
   const { user, selectUser, signOut } = useUser();
+  const { themeId, selectTheme } = useTheme(user?.id);
   const {
     tasks, categories, loading, error,
     completeTask, uncompleteTask, clearCompletedTasks,
@@ -26,6 +29,7 @@ function App() {
   const [tab, setTab] = useState<Tab>('upcoming');
   const [showAdd, setShowAdd] = useState(false);
   const [showAddCategory, setShowAddCategory] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [quickAddCategory, setQuickAddCategory] = useState<string | null>(null);
@@ -74,7 +78,7 @@ function App() {
       {/* Header */}
       <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-5 pt-12 pb-4 sticky top-0 z-40">
         <div className="flex items-center justify-between mb-4">
-          <button onClick={signOut} className="flex items-center gap-2 active:opacity-70 transition-opacity">
+          <button onClick={() => setShowUserMenu(true)} className="flex items-center gap-2 active:opacity-70 transition-opacity">
             <span className="text-2xl">{user.emoji}</span>
             <h1 className="text-xl font-bold text-gray-900 dark:text-white">Just Do It</h1>
           </button>
@@ -86,7 +90,7 @@ function App() {
               </button>
             )}
             <button onClick={() => setShowAdd(true)}
-              className="bg-blue-500 text-white w-9 h-9 rounded-full text-xl font-light flex items-center justify-center shadow-sm hover:bg-blue-600 transition-colors">
+              className="bg-accent text-white w-9 h-9 rounded-full text-xl font-light flex items-center justify-center shadow-sm hover:bg-accent-dark transition-colors">
               +
             </button>
           </div>
@@ -99,7 +103,7 @@ function App() {
                 ${tab === key ? 'bg-white dark:bg-gray-700 text-gray-800 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}>
               {label}
               {key === 'upcoming' && todayPendingCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-[10px] font-bold min-w-[16px] h-4 px-1 rounded-full flex items-center justify-center leading-none">
+                <span className="absolute -top-1 -right-1 bg-accent text-white text-[10px] font-bold min-w-[16px] h-4 px-1 rounded-full flex items-center justify-center leading-none">
                   {todayPendingCount}
                 </span>
               )}
@@ -205,6 +209,15 @@ function App() {
           onUpdate={updateCategory}
           onDelete={deleteCategory}
           onClose={() => setEditingCategory(null)}
+        />
+      )}
+      {showUserMenu && (
+        <UserMenu
+          user={user}
+          currentTheme={themeId}
+          onThemeSelect={selectTheme}
+          onSignOut={() => { signOut(); setShowUserMenu(false); }}
+          onClose={() => setShowUserMenu(false)}
         />
       )}
     </div>
