@@ -56,34 +56,36 @@ export function useTasks() {
 
   const completeTask = useCallback(async (id: string) => {
     const today = new Date().toISOString().split('T')[0];
-    await api.updateTask(id, { status: 'Done', lastCompleted: new Date().toISOString(), completedDate: today });
-    await fetchAll();
+    const updates = { status: 'Done' as const, lastCompleted: new Date().toISOString(), completedDate: today };
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+    api.updateTask(id, updates).catch(() => fetchAll());
   }, [fetchAll]);
 
   const uncompleteTask = useCallback(async (id: string) => {
-    await api.updateTask(id, { status: 'To Do', lastCompleted: null, completedDate: null });
-    await fetchAll();
+    const updates = { status: 'To Do' as const, lastCompleted: null, completedDate: null };
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+    api.updateTask(id, updates).catch(() => fetchAll());
   }, [fetchAll]);
 
   const clearCompletedTasks = useCallback(async () => {
     const doneTasks = tasks.filter(t => t.status === 'Done');
-    await Promise.all(doneTasks.map(t => api.deleteTask(t.id)));
-    await fetchAll();
+    setTasks(prev => prev.filter(t => t.status !== 'Done'));
+    Promise.all(doneTasks.map(t => api.deleteTask(t.id))).catch(() => fetchAll());
   }, [tasks, fetchAll]);
 
   const addTask = useCallback(async (task: Omit<Task, 'id'>) => {
-    await api.addTask(task);
-    await fetchAll();
-  }, [fetchAll]);
+    const newTask = await api.addTask(task);
+    setTasks(prev => [...prev, newTask]);
+  }, []);
 
   const updateTask = useCallback(async (id: string, updates: Partial<Task>) => {
-    await api.updateTask(id, updates);
-    await fetchAll();
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+    api.updateTask(id, updates).catch(() => fetchAll());
   }, [fetchAll]);
 
   const deleteTask = useCallback(async (id: string) => {
-    await api.deleteTask(id);
-    await fetchAll();
+    setTasks(prev => prev.filter(t => t.id !== id));
+    api.deleteTask(id).catch(() => fetchAll());
   }, [fetchAll]);
 
   const reorderTasks = useCallback(async (
@@ -111,42 +113,45 @@ export function useTasks() {
       await api.reorderTasks(reordered.map(t => t.id));
     } else {
       // Moving to a different category
-      await api.updateTask(activeId, { category: overCategory });
       const newOverTasks = [...overCatTasks];
       const overIndex = newOverTasks.findIndex(t => t.id === overId);
       newOverTasks.splice(overIndex >= 0 ? overIndex : newOverTasks.length, 0, { id: activeId } as Task);
       setTasks(prev => prev.map(t =>
         t.id === activeId ? { ...t, category: overCategory } : t
       ));
-      await api.reorderTasks(newOverTasks.map(t => t.id));
-      await fetchAll();
+      Promise.all([
+        api.updateTask(activeId, { category: overCategory }),
+        api.reorderTasks(newOverTasks.map(t => t.id)),
+      ]).catch(() => fetchAll());
     }
   }, [fetchAll]);
 
   const addCategory = useCallback(async (name: string, color: string) => {
-    await api.addCategory({ name, color, sortOrder: categories.length });
-    await fetchAll();
-  }, [categories.length, fetchAll]);
+    const newCat = await api.addCategory({ name, color, sortOrder: categories.length });
+    setCategories(prev => [...prev, newCat]);
+  }, [categories.length]);
 
   const updateCategory = useCallback(async (id: string, updates: Partial<Category>) => {
-    await api.updateCategory(id, updates);
-    await fetchAll();
+    setCategories(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
+    api.updateCategory(id, updates).catch(() => fetchAll());
   }, [fetchAll]);
 
   const deleteCategory = useCallback(async (id: string, categoryName: string) => {
-    // Delete all tasks in this category first
     const categoryTasks = tasks.filter(t => t.category === categoryName);
-    await Promise.all(categoryTasks.map(t => api.deleteTask(t.id)));
-    await api.deleteCategory(id);
-    await fetchAll();
+    setTasks(prev => prev.filter(t => t.category !== categoryName));
+    setCategories(prev => prev.filter(c => c.id !== id));
+    Promise.all([
+      ...categoryTasks.map(t => api.deleteTask(t.id)),
+      api.deleteCategory(id),
+    ]).catch(() => fetchAll());
   }, [tasks, fetchAll]);
 
   const reorderCategories = useCallback(async (oldIndex: number, newIndex: number, allCats: Category[]) => {
     const reordered = [...allCats];
     const [moved] = reordered.splice(oldIndex, 1);
     reordered.splice(newIndex, 0, moved);
-    await api.reorderCategories(reordered.map(c => c.id));
-    await fetchAll();
+    setCategories(reordered.map((c, idx) => ({ ...c, sortOrder: idx })));
+    api.reorderCategories(reordered.map(c => c.id)).catch(() => fetchAll());
   }, [fetchAll]);
 
   return {
