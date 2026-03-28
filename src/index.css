@@ -35,13 +35,13 @@ input, select, textarea {
   --font-body: 'Nunito', sans-serif;
 }
 
-/* Forest: light mode, emerald accent, Lora (serif) */
+/* Forest: light mode, emerald accent, Inter (sans-serif) */
 [data-theme="forest"] {
   --accent:         16 185 129;  /* emerald-500 */
   --accent-dark:     5 150 105;  /* emerald-600 */
   --accent-light:  209 250 229;  /* emerald-100 */
   --accent-subtle:  52 211 153;  /* emerald-400 */
-  --font-body: 'Lora', serif;
+  --font-body: 'Inter', sans-serif;
 }
 
 /* ── Base body styles ────────────────────────────────────────────────── */
