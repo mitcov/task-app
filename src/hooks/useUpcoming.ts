@@ -44,17 +44,22 @@ export function useUpcoming(tasks: Task[], userId: string) {
     const assignedHere = new Set(thisAssignments.map(a => a.taskId));
     const assignedElsewhere = new Set(otherAssignments.map(a => a.taskId));
     return tasks.filter(task => {
-      if (task.status === 'Done') return false;
+      if (task.status === 'Done') {
+        // Today-completed tasks stay visible in today's view only
+        return task.completedDate === dateStr && dateStr === today;
+      }
       if (assignedHere.has(task.id)) return true;
       if (assignedElsewhere.has(task.id)) return false;
       if (task.dueDate === dateStr) return true;
+      // Pull overdue tasks (past due date, not completed) into today only
+      if (dateStr === today && task.dueDate && task.dueDate < today) return true;
       if (task.recurrence === 'Daily') return true;
       if ((task.recurrence === 'Weekly' || task.recurrence === 'Biweekly') && task.recurrenceDay) {
         return DAY_MAP[task.recurrenceDay] === dayNum;
       }
       return false;
     });
-  }, [tasks]);
+  }, [tasks, today]);
 
   const fetchUpcoming = useCallback(async () => {
     if (!userId) return;

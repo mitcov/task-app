@@ -1,4 +1,10 @@
-export type Priority = '🔴 High' | '🟡 Medium' | '🟢 Low';
+export type Priority = 'High' | 'Medium' | 'Low';
+
+export function priorityColor(priority: Priority): string {
+  if (priority === 'High') return 'text-red-500 dark:text-red-400';
+  if (priority === 'Medium') return 'text-amber-500 dark:text-amber-400';
+  return 'text-green-600 dark:text-green-400';
+}
 export type Status = 'To Do' | 'Done' | 'Skipped';
 export type Recurrence = 'None' | 'Daily' | 'Weekly' | 'Biweekly' | 'Monthly';
 export type RecurrenceDay = 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday';
@@ -36,6 +42,7 @@ export interface Task {
   priority: Priority;
   sortOrder: number;
   lastCompleted?: string;
+  completedDate?: string;
   notes?: string;
   reminders: Reminder[];
 }

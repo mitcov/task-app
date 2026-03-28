@@ -18,7 +18,7 @@ export function TaskModal({ task, existingCategories, lockedCategory, onSave, on
   const [newCategory, setNewCategory] = useState<string | null>(
     existingCategories.length === 0 ? '' : null
   );
-  const [priority, setPriority] = useState<Priority>(task?.priority || '🟡 Medium');
+  const [priority, setPriority] = useState<Priority>(task?.priority || 'Medium');
   const [recurrence, setRecurrence] = useState<Recurrence>(task?.recurrence || 'None');
   const [recurrenceDay, setRecurrenceDay] = useState<RecurrenceDay>(task?.recurrenceDay || 'Sunday');
   const [dueDate, setDueDate] = useState(task?.dueDate ? task.dueDate.split('T')[0] : '');
@@ -142,15 +142,22 @@ export function TaskModal({ task, existingCategories, lockedCategory, onSave, on
               Priority
             </label>
             <div className="flex gap-2">
-              {(['🔴 High', '🟡 Medium', '🟢 Low'] as Priority[]).map(p => (
-                <button key={p} onClick={() => setPriority(p)}
-                  className={`flex-1 py-2 rounded-xl text-sm border transition-colors
-                    ${priority === p
-                      ? 'border-blue-400 bg-blue-50 dark:bg-blue-950 text-blue-600 font-semibold'
-                      : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400'}`}>
-                  {p}
-                </button>
-              ))}
+              {(['High', 'Medium', 'Low'] as Priority[]).map(p => {
+                const colors = {
+                  High: { active: 'border-red-400 bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-400' },
+                  Medium: { active: 'border-amber-400 bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400' },
+                  Low: { active: 'border-green-400 bg-green-50 dark:bg-green-950 text-green-600 dark:text-green-400' },
+                };
+                return (
+                  <button key={p} onClick={() => setPriority(p)}
+                    className={`flex-1 py-2 rounded-xl text-sm border transition-colors font-medium
+                      ${priority === p
+                        ? colors[p].active
+                        : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400'}`}>
+                    {p}
+                  </button>
+                );
+              })}
             </div>
           </div>
 

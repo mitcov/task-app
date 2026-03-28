@@ -116,6 +116,15 @@ async function initDB() {
     ALTER TABLE reminders ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT 'once';
     ALTER TABLE reminders ADD COLUMN IF NOT EXISTS daily_time TIME;
     ALTER TABLE reminders ADD COLUMN IF NOT EXISTS daily_start DATE;
+    ALTER TABLE tasks ADD COLUMN IF NOT EXISTS completed_date DATE;
+  `);
+
+  // Migrate emoji priorities to plain text (safe to run multiple times)
+  await pool.query(`
+    UPDATE tasks SET priority = 'High' WHERE priority = '🔴 High';
+    UPDATE tasks SET priority = 'Medium' WHERE priority = '🟡 Medium';
+    UPDATE tasks SET priority = 'Low' WHERE priority = '🟢 Low';
+    ALTER TABLE tasks ALTER COLUMN priority SET DEFAULT 'Medium';
   `);
 
   console.log('DB initialized');
@@ -148,6 +157,7 @@ function rowToTask(row, reminders = []) {
     reminderTime: row.reminder_time || null,
     sortOrder: row.sort_order,
     lastCompleted: row.last_completed,
+    completedDate: row.completed_date || null,
     notes: row.notes,
     reminders: reminders.map(rowToReminder),
   };
@@ -244,7 +254,7 @@ app.patch('/tasks/:id', async (req, res) => {
     const {
       title, category, status, priority, recurrence,
       recurrenceDay, dueDate, reminderTime, sortOrder,
-      lastCompleted, notes, reminders
+      lastCompleted, completedDate, notes, reminders
     } = req.body;
 
     const result = await pool.query(
@@ -259,11 +269,12 @@ app.patch('/tasks/:id', async (req, res) => {
         reminder_time = COALESCE($8::time, reminder_time),
         sort_order = COALESCE($9, sort_order),
         last_completed = COALESCE($10::timestamptz, last_completed),
-        notes = COALESCE($11, notes)
-       WHERE id = $12 RETURNING *`,
+        notes = COALESCE($11, notes),
+        completed_date = COALESCE($12::date, completed_date)
+       WHERE id = $13 RETURNING *`,
       [title, category, status, priority, recurrence, recurrenceDay,
        dueDate || null, reminderTime || null, sortOrder,
-       lastCompleted || null, notes, id]
+       lastCompleted || null, notes, completedDate || null, id]
     );
 
     const savedReminders = reminders !== undefined

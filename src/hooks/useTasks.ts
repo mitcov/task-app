@@ -27,9 +27,11 @@ export function useTasks() {
   }, []); // stable — no dependencies needed since api functions don't change
 
   const groupedCategories = useCallback((): Category[] => {
+    const today = new Date().toISOString().split('T')[0];
     const taskMap: Record<string, Task[]> = {};
     tasks.forEach(task => {
-      if (task.status === 'Done') return; // Done tasks live in the Done tab
+      // Hide done tasks unless they were completed today (they fade in place until tomorrow)
+      if (task.status === 'Done' && task.completedDate !== today) return;
       if (!taskMap[task.category]) taskMap[task.category] = [];
       taskMap[task.category].push(task);
     });
@@ -53,7 +55,8 @@ export function useTasks() {
   }, [tasks, categories]);
 
   const completeTask = useCallback(async (id: string) => {
-    await api.updateTask(id, { status: 'Done', lastCompleted: new Date().toISOString() });
+    const today = new Date().toISOString().split('T')[0];
+    await api.updateTask(id, { status: 'Done', lastCompleted: new Date().toISOString(), completedDate: today });
     await fetchAll();
   }, [fetchAll]);
 
