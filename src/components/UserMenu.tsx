@@ -49,24 +49,31 @@ export function UserMenu({ user, currentTheme, onThemeSelect, onSignOut, onClose
                 onClick={() => onThemeSelect(theme.id)}
                 className="flex flex-col items-center gap-1.5 group"
               >
-                {/* Swatch */}
+                {/* Swatch card */}
                 <div
-                  className={`w-full aspect-square rounded-2xl border-2 flex items-center justify-center transition-transform active:scale-95
+                  className={`w-full aspect-square rounded-2xl border-2 flex flex-col items-center justify-center gap-1 transition-transform active:scale-95 overflow-hidden
                     ${isActive
                       ? 'border-gray-800 dark:border-white scale-105 shadow-md'
                       : 'border-gray-200 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500'
                     }`}
                   style={{ backgroundColor: theme.bgHex }}
                 >
-                  {/* Mini accent circle */}
+                  {/* Font preview */}
+                  <span
+                    className="text-lg font-bold leading-none"
+                    style={{ fontFamily: theme.fontFamily, color: theme.textHex }}
+                  >
+                    Aa
+                  </span>
+                  {/* Accent dot */}
                   <div
-                    className="w-6 h-6 rounded-full shadow-sm"
+                    className="w-4 h-1.5 rounded-full"
                     style={{ backgroundColor: theme.accentHex }}
                   />
                 </div>
-                {/* Label */}
+                {/* Theme name */}
                 <span
-                  className={`text-xs font-medium transition-colors
+                  className={`text-xs font-medium transition-colors leading-tight text-center
                     ${isActive
                       ? 'text-gray-900 dark:text-white font-semibold'
                       : 'text-gray-500 dark:text-gray-400'
@@ -74,10 +81,13 @@ export function UserMenu({ user, currentTheme, onThemeSelect, onSignOut, onClose
                 >
                   {theme.name}
                 </span>
-                {/* Active indicator */}
-                {isActive && (
-                  <span className="text-[10px] font-bold text-gray-700 dark:text-gray-300">✓</span>
-                )}
+                {/* Font label */}
+                <span
+                  className="text-[10px] text-gray-400 dark:text-gray-600 -mt-1 leading-none"
+                  style={{ fontFamily: theme.fontFamily }}
+                >
+                  {theme.fontLabel}
+                </span>
               </button>
             );
           })}
