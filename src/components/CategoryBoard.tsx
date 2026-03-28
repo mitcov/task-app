@@ -19,7 +19,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Category, Task, CATEGORY_COLORS } from '../types';
+import { Category, Task, CATEGORY_COLORS, priorityColor } from '../types';
 
 // ── TaskCard ──────────────────────────────────────────────────────────────────
 
@@ -44,7 +44,7 @@ export function TaskCard({ task, onComplete, onClick, overlay }: TaskCardProps) 
     <div
       ref={setNodeRef}
       style={overlay ? {} : style}
-      className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-3 mb-2 flex items-center gap-3 
+      className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-2.5 mb-1.5 flex items-center gap-2
         ${task.status === 'Done' ? 'opacity-50' : ''}
         ${overlay ? 'shadow-lg rotate-1 scale-105' : ''}`}
     >
@@ -66,7 +66,7 @@ export function TaskCard({ task, onComplete, onClick, overlay }: TaskCardProps) 
           {task.title}
         </p>
         <div className="flex items-center gap-2 mt-0.5">
-          <span className="text-xs text-gray-400">{task.priority}</span>
+          <span className={`text-xs font-medium ${priorityColor(task.priority)}`}>{task.priority}</span>
           {task.recurrence !== 'None' && (
             <span className="text-xs text-blue-400">↻ {task.recurrence}</span>
           )}
@@ -117,11 +117,11 @@ function CategoryColumn({ category, onComplete, onTaskClick, onEditCategory, onQ
     <div
       ref={setNodeRef}
       style={style}
-      className={`rounded-2xl p-4 mb-4 transition-colors border-2
+      className={`rounded-2xl p-3 mb-3 transition-colors border-2
         ${isOver && !isDraggingCategory ? 'border-blue-300 bg-blue-50 dark:bg-blue-950' : 'border-transparent bg-gray-50 dark:bg-gray-900'}
         ${isDragging ? 'shadow-xl' : ''}`}
     >
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-2">
         {/* Category drag handle */}
         <div {...catAttributes} {...catListeners}
           className="text-gray-400 dark:text-gray-500 cursor-grab active:cursor-grabbing select-none px-2 py-2 flex-shrink-0 touch-none">

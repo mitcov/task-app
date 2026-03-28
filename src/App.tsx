@@ -113,7 +113,7 @@ function App() {
       </div>
 
       {/* Content — all three views stay mounted to avoid reload flashes */}
-      <div className="px-4 py-5 max-w-lg mx-auto">
+      <div className="px-4 py-3 max-w-lg mx-auto">
         <div className={tab === 'upcoming' ? '' : 'hidden'}>
           <UpcomingView
             tasks={tasks}

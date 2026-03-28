@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Task, Category, CATEGORY_COLORS } from '../types';
+import { Task, Category, CATEGORY_COLORS, priorityColor } from '../types';
 
 interface CompletedViewProps {
   tasks: Task[];
@@ -96,7 +96,7 @@ export function CompletedView({ tasks, categories, onRestore, onClearAll, onTask
 
       {/* Tasks grouped by category */}
       {groupedCategories.map(([catName, catTasks]) => (
-        <div key={catName} className="mb-5">
+        <div key={catName} className="mb-4">
           <div className="flex items-center gap-2 mb-2 px-1">
             <span className={`text-xs font-bold px-2 py-0.5 rounded-lg border ${getCategoryColor(catName)}`}>
               {catName}
@@ -106,7 +106,7 @@ export function CompletedView({ tasks, categories, onRestore, onClearAll, onTask
           {catTasks.map(task => (
             <div
               key={task.id}
-              className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-3 mb-2 flex items-center gap-3"
+              className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-2.5 mb-1.5 flex items-center gap-2"
             >
               {/* Restore button */}
               <button
@@ -123,7 +123,7 @@ export function CompletedView({ tasks, categories, onRestore, onClearAll, onTask
                   {task.title}
                 </p>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-xs text-gray-400">{task.priority}</span>
+                  <span className={`text-xs font-medium ${priorityColor(task.priority)}`}>{task.priority}</span>
                   {task.recurrence !== 'None' && (
                     <span className="text-xs text-blue-400">↻ {task.recurrence}</span>
                   )}

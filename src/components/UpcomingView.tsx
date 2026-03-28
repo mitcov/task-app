@@ -23,7 +23,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Task, DaySection, SectionAssignment, SectionTemplate } from '../types';
+import { Task, DaySection, SectionAssignment, SectionTemplate, priorityColor } from '../types';
 import { useUpcoming } from '../hooks/useUpcoming';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -103,12 +103,19 @@ function TaskRow({ task, containerId, date, onComplete, onTaskClick, overlay }: 
     opacity: isDragging ? 0.2 : 1,
   };
 
+  const today = new Date().toISOString().split('T')[0];
+  const isOverdue = task.status !== 'Done' && !!task.dueDate && task.dueDate < today;
+  const overdueDays = isOverdue
+    ? Math.round((new Date(today).getTime() - new Date(task.dueDate!).getTime()) / (1000 * 60 * 60 * 24))
+    : 0;
+
   return (
     <div
       ref={setNodeRef}
       style={overlay ? {} : style}
-      className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-3 mb-2 flex items-center gap-3
+      className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-2.5 mb-1.5 flex items-center gap-2
         ${task.status === 'Done' ? 'opacity-50' : ''}
+        ${isOverdue ? 'border-red-200 dark:border-red-900' : ''}
         ${overlay ? 'shadow-xl rotate-1 scale-105' : ''}`}
     >
       <div {...attributes} {...listeners}
@@ -118,7 +125,7 @@ function TaskRow({ task, containerId, date, onComplete, onTaskClick, overlay }: 
       <button
         onClick={(e) => { e.stopPropagation(); onComplete(task.id); }}
         className={`w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors
-          ${task.status === 'Done' ? 'bg-green-400 border-green-400 text-white' : 'border-gray-300 hover:border-green-400'}`}
+          ${task.status === 'Done' ? 'bg-green-400 border-green-400 text-white' : isOverdue ? 'border-red-400 hover:border-green-400' : 'border-gray-300 hover:border-green-400'}`}
       >
         {task.status === 'Done' && <span className="text-xs">✓</span>}
       </button>
@@ -128,8 +135,13 @@ function TaskRow({ task, containerId, date, onComplete, onTaskClick, overlay }: 
         </p>
         <div className="flex items-center gap-2 mt-0.5">
           <span className="text-xs text-gray-400">{task.category}</span>
-          <span className="text-xs text-gray-400">{task.priority}</span>
+          <span className={`text-xs font-medium ${priorityColor(task.priority)}`}>{task.priority}</span>
           {task.recurrence !== 'None' && <span className="text-xs text-blue-400">↻</span>}
+          {isOverdue && (
+            <span className="text-xs font-semibold text-red-500 dark:text-red-400">
+              {overdueDays === 1 ? '1 day overdue' : `${overdueDays} days overdue`}
+            </span>
+          )}
         </div>
       </div>
     </div>
@@ -170,7 +182,7 @@ function SortableSection({
   };
 
   return (
-    <div style={style} className="mb-3">
+    <div style={style} className="mb-2">
       <div className={`bg-gray-50 dark:bg-gray-900 rounded-2xl border-2 transition-colors duration-150
         ${isOver ? 'border-blue-300 dark:border-blue-700' : 'border-gray-200 dark:border-gray-700'}
         ${isDragging ? 'opacity-30' : ''}`}>
@@ -598,11 +610,11 @@ function DayBlock({
   }, 0);
 
   return (
-    <div ref={setDayRef} className={`mb-8 transition-all duration-200 rounded-2xl p-1
+    <div ref={setDayRef} className={`mb-5 transition-all duration-200 rounded-2xl p-1
       ${isIncomingCrossDayDrop
         ? 'ring-2 ring-blue-400 ring-offset-2 dark:ring-offset-gray-950 bg-blue-50/30 dark:bg-blue-950/20'
         : ''}`}>
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-2">
         <button onClick={() => setCollapsed(c => !c)} className="flex items-center gap-2">
           <h2 className="text-base font-bold text-gray-800 dark:text-white">{label}</h2>
           {pending > 0 && (
