@@ -74,15 +74,15 @@ async function initDB() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
 
-    CREATE UNIQUE INDEX IF NOT EXISTS push_subscriptions_endpoint_unique
-      ON push_subscriptions ((subscription->>'endpoint'));
-
     DELETE FROM push_subscriptions
     WHERE id NOT IN (
       SELECT DISTINCT ON (subscription->>'endpoint') id
       FROM push_subscriptions
       ORDER BY subscription->>'endpoint', created_at
     );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS push_subscriptions_endpoint_unique
+      ON push_subscriptions ((subscription->>'endpoint'));
 
     CREATE TABLE IF NOT EXISTS day_sections (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
