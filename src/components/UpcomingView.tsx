@@ -86,11 +86,12 @@ function LooseZoneDropZone({ date, active }: { date: string; active: boolean }) 
 
 // ── Task Row ──────────────────────────────────────────────────────────────────
 
-function TaskRow({ task, containerId, date, onComplete, onTaskClick, overlay }: {
+function TaskRow({ task, containerId, date, onComplete, onUncomplete, onTaskClick, overlay }: {
   task: Task;
   containerId: string;
   date: string;
   onComplete: (id: string) => void;
+  onUncomplete: (id: string) => void;
   onTaskClick: (task: Task) => void;
   overlay?: boolean;
 }) {
@@ -123,9 +124,9 @@ function TaskRow({ task, containerId, date, onComplete, onTaskClick, overlay }: 
         ⣿
       </div>
       <button
-        onClick={(e) => { e.stopPropagation(); onComplete(task.id); }}
+        onClick={(e) => { e.stopPropagation(); task.status === 'Done' ? onUncomplete(task.id) : onComplete(task.id); }}
         className={`w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors
-          ${task.status === 'Done' ? 'bg-green-400 border-green-400 text-white' : isOverdue ? 'border-red-400 hover:border-green-400' : 'border-gray-300 hover:border-green-400'}`}
+          ${task.status === 'Done' ? 'bg-green-400 border-green-400 text-white hover:bg-red-400 hover:border-red-400' : isOverdue ? 'border-red-400 hover:border-green-400' : 'border-gray-300 hover:border-green-400'}`}
       >
         {task.status === 'Done' && <span className="text-xs">✓</span>}
       </button>
@@ -152,7 +153,7 @@ function TaskRow({ task, containerId, date, onComplete, onTaskClick, overlay }: 
 
 function SortableSection({
   section, projectedTasks, date, dayContainerId, activeTask,
-  onRename, onDelete, onComplete, onTaskClick,
+  onRename, onDelete, onComplete, onUncomplete, onTaskClick,
 }: {
   section: DaySection;
   projectedTasks: Task[];
@@ -162,6 +163,7 @@ function SortableSection({
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
   onComplete: (id: string) => void;
+  onUncomplete: (id: string) => void;
   onTaskClick: (task: Task) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -222,6 +224,7 @@ function SortableSection({
                 containerId={section.id}
                 date={date}
                 onComplete={onComplete}
+                onUncomplete={onUncomplete}
                 onTaskClick={onTaskClick}
               />
             ))}
@@ -559,7 +562,7 @@ function DayBlock({
   label, date, dayContainerId, tasks, sections, assignments, templates,
   clonedDayLevel, clonedSectionTasks,
   activeTask, activeSection, activeItemDate, overContainerDate,
-  onComplete, onTaskClick, onAddSection, onRenameSection,
+  onComplete, onUncomplete, onTaskClick, onAddSection, onRenameSection,
   onDeleteSection, onSaveTemplate, onDeleteTemplate,
 }: {
   label: string;
@@ -576,6 +579,7 @@ function DayBlock({
   activeItemDate: string | null;
   overContainerDate: string | null;
   onComplete: (id: string) => void;
+  onUncomplete: (id: string) => void;
   onTaskClick: (task: Task) => void;
   onAddSection: (date: string, title: string) => void;
   onRenameSection: (id: string, title: string) => void;
@@ -596,15 +600,15 @@ function DayBlock({
   const isIncomingCrossDayDrop = isDragging && !!activeItemDate && activeItemDate !== date && overContainerDate === date;
   const isOutgoingCrossDayDrag = !!activeTask && activeItemDate === date && overContainerDate !== null && overContainerDate !== date;
 
-  // Pending count across loose tasks + all section tasks in this day
-  const pending = dayLevel.reduce((count, e) => {
-    if (e.kind === 'task' && e.task.status !== 'Done') return count + 1;
+  // Total count across loose tasks + all section tasks in this day (including done)
+  const total = dayLevel.reduce((count, e) => {
+    if (e.kind === 'task') return count + 1;
     if (e.kind === 'section') {
       const canonical = tasks.filter(t =>
         assignments.some(a => a.taskId === t.id && a.sectionId === e.section.id)
       );
       const projected = clonedSectionTasks?.get(e.section.id) ?? canonical;
-      return count + projected.filter(t => t.status !== 'Done').length;
+      return count + projected.length;
     }
     return count;
   }, 0);
@@ -617,9 +621,9 @@ function DayBlock({
       <div className="flex items-center justify-between mb-2">
         <button onClick={() => setCollapsed(c => !c)} className="flex items-center gap-2">
           <h2 className="text-base font-bold text-gray-800 dark:text-white">{label}</h2>
-          {pending > 0 && (
+          {total > 0 && (
             <span className="bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 text-xs font-semibold px-2 py-0.5 rounded-full">
-              {pending}
+              {total}
             </span>
           )}
           <span className="text-gray-400 text-sm">{collapsed ? '▸' : '▾'}</span>
@@ -664,6 +668,7 @@ function DayBlock({
                       onRename={onRenameSection}
                       onDelete={onDeleteSection}
                       onComplete={onComplete}
+                      onUncomplete={onUncomplete}
                       onTaskClick={onTaskClick}
                     />
                   );
@@ -677,6 +682,7 @@ function DayBlock({
                     containerId={dayContainerId}
                     date={date}
                     onComplete={onComplete}
+                    onUncomplete={onUncomplete}
                     onTaskClick={onTaskClick}
                   />
                 );
@@ -712,12 +718,13 @@ interface UpcomingViewProps {
   tasks: Task[];
   userId: string;
   onComplete: (id: string) => void;
+  onUncomplete: (id: string) => void;
   onTaskClick: (task: Task) => void;
   onUpdateTask: (id: string, updates: any) => void;
   onTodayPendingCount?: (count: number) => void;
 }
 
-export function UpcomingView({ tasks, userId, onComplete, onTaskClick, onTodayPendingCount }: UpcomingViewProps) {
+export function UpcomingView({ tasks, userId, onComplete, onUncomplete, onTaskClick, onTodayPendingCount }: UpcomingViewProps) {
   // ── Drag state ───────────────────────────────────────────────────────────
   const [clonedState, setClonedState] = useState<ClonedDragState | null>(null);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
@@ -739,10 +746,10 @@ export function UpcomingView({ tasks, userId, onComplete, onTaskClick, onTodayPe
     addTemplate, deleteTemplate,
   } = useUpcoming(tasks, userId);
 
-  // Report today's accurate pending count (used for tab badge + PWA badge)
+  // Report today's pending (non-done) count (used for tab badge + PWA badge)
   useEffect(() => {
-    onTodayPendingCount?.(todayTasks.length);
-  }, [todayTasks.length, onTodayPendingCount]);
+    onTodayPendingCount?.(todayTasks.filter(t => t.status !== 'Done').length);
+  }, [todayTasks, onTodayPendingCount]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -908,7 +915,7 @@ export function UpcomingView({ tasks, userId, onComplete, onTaskClick, onTodayPe
         clonedSectionTasks={clonedState?.sectionTasks ?? null}
         activeTask={activeTask} activeSection={activeSection}
         activeItemDate={activeItemDate} overContainerDate={overContainerDate}
-        onComplete={onComplete} onTaskClick={onTaskClick}
+        onComplete={onComplete} onUncomplete={onUncomplete} onTaskClick={onTaskClick}
         onAddSection={addSection}
         onRenameSection={(id, title) => updateSection(id, { title })}
         onDeleteSection={deleteSection}
@@ -922,7 +929,7 @@ export function UpcomingView({ tasks, userId, onComplete, onTaskClick, onTodayPe
         clonedSectionTasks={clonedState?.sectionTasks ?? null}
         activeTask={activeTask} activeSection={activeSection}
         activeItemDate={activeItemDate} overContainerDate={overContainerDate}
-        onComplete={onComplete} onTaskClick={onTaskClick}
+        onComplete={onComplete} onUncomplete={onUncomplete} onTaskClick={onTaskClick}
         onAddSection={addSection}
         onRenameSection={(id, title) => updateSection(id, { title })}
         onDeleteSection={deleteSection}
@@ -931,7 +938,7 @@ export function UpcomingView({ tasks, userId, onComplete, onTaskClick, onTodayPe
 
       <DragOverlay>
         {activeTask && (
-          <TaskRow task={activeTask} containerId="" date="" onComplete={() => {}} onTaskClick={() => {}} overlay />
+          <TaskRow task={activeTask} containerId="" date="" onComplete={() => {}} onUncomplete={() => {}} onTaskClick={() => {}} overlay />
         )}
         {activeSection && (
           <SectionGhost section={activeSection} />

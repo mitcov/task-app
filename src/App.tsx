@@ -119,6 +119,7 @@ function App() {
             tasks={tasks}
             userId={user.id}
             onComplete={completeTask}
+            onUncomplete={uncompleteTask}
             onTaskClick={setEditingTask}
             onUpdateTask={updateTask}
             onTodayPendingCount={setTodayPendingCount}
