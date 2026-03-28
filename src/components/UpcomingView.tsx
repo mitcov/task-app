@@ -299,7 +299,7 @@ function AddSectionButton({ date, templates, onAdd, onSaveTemplate, onDeleteTemp
             </label>
             <div className="flex gap-2">
               <button onClick={() => { if (newTitle.trim()) handleAdd(newTitle.trim()); }} disabled={!newTitle.trim()}
-                className="flex-1 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-200 text-white text-sm font-semibold py-2 rounded-xl transition-colors">
+                className="flex-1 bg-accent hover:bg-accent-dark disabled:bg-gray-200 text-white text-sm font-semibold py-2 rounded-xl transition-colors">
                 Add
               </button>
               <button onClick={() => setOpen(false)}

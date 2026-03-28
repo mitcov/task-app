@@ -6,6 +6,40 @@ input, select, textarea {
   font-size: 16px !important;
 }
 
+/* ── Theme CSS variables ─────────────────────────────────────────────── */
+
+/* Classic: light mode, blue accent (default) */
+:root {
+  --accent:       59 130 246;   /* blue-500   */
+  --accent-dark:  37  99 235;   /* blue-600   */
+  --accent-light: 219 234 254;  /* blue-100   */
+  --accent-subtle: 96 165 250;  /* blue-400   */
+}
+
+/* Midnight: dark mode, violet accent */
+[data-theme="midnight"] {
+  --accent:       139  92 246;  /* violet-500 */
+  --accent-dark:  124  58 237;  /* violet-600 */
+  --accent-light:  46  16 101;  /* violet-950 */
+  --accent-subtle: 167 139 250; /* violet-400 */
+}
+
+/* Sunset: light mode, amber accent */
+[data-theme="sunset"] {
+  --accent:       245 158  11;  /* amber-500  */
+  --accent-dark:  217 119   6;  /* amber-600  */
+  --accent-light: 255 251 235;  /* amber-50   */
+  --accent-subtle: 251 191  36; /* amber-400  */
+}
+
+/* Forest: light mode, emerald accent */
+[data-theme="forest"] {
+  --accent:        16 185 129;  /* emerald-500 */
+  --accent-dark:   5  150 105;  /* emerald-600 */
+  --accent-light: 209 250 229;  /* emerald-100 */
+  --accent-subtle: 52 211 153;  /* emerald-400 */
+}
+
 @layer base {
   body {
     @apply bg-gray-50 dark:bg-gray-950;

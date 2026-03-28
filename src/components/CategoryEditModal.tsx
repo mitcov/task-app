@@ -66,7 +66,7 @@ export function CategoryEditModal({ category, onSave, onUpdate, onDelete, onClos
         </div>
 
         <button onClick={handleSave} disabled={!name.trim()}
-          className="w-full mt-6 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-200 disabled:text-gray-400 text-white font-semibold py-3.5 rounded-2xl transition-colors">
+          className="w-full mt-6 bg-accent hover:bg-accent-dark disabled:bg-gray-200 disabled:text-gray-400 text-white font-semibold py-3.5 rounded-2xl transition-colors">
           {isEdit ? 'Save Changes' : 'Add Category'}
         </button>
 
