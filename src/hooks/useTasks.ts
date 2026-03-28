@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import { Task, Category } from '../types';
 import { api } from '../lib/api';
 
@@ -26,7 +26,7 @@ export function useTasks() {
     }
   }, []); // stable — no dependencies needed since api functions don't change
 
-  const groupedCategories = useCallback((): Category[] => {
+  const groupedCategories = useMemo((): Category[] => {
     const today = new Date().toISOString().split('T')[0];
     const taskMap: Record<string, Task[]> = {};
     tasks.forEach(task => {
@@ -158,7 +158,7 @@ export function useTasks() {
     tasks,
     loading,
     error,
-    categories: groupedCategories(),
+    categories: groupedCategories,
     rawCategories: categories,
     completeTask,
     uncompleteTask,
