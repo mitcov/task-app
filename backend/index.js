@@ -51,8 +51,11 @@ async function initDB() {
       label TEXT,
       daily_time TIME,
       daily_start DATE,
+      last_fired_date DATE,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
+
+    ALTER TABLE reminders ADD COLUMN IF NOT EXISTS last_fired_date DATE;
 
     CREATE TABLE IF NOT EXISTS categories (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -69,6 +72,16 @@ async function initDB() {
       user_id TEXT NOT NULL,
       subscription JSONB NOT NULL,
       created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS push_subscriptions_endpoint_unique
+      ON push_subscriptions ((subscription->>'endpoint'));
+
+    DELETE FROM push_subscriptions
+    WHERE id NOT IN (
+      SELECT DISTINCT ON (subscription->>'endpoint') id
+      FROM push_subscriptions
+      ORDER BY subscription->>'endpoint', created_at
     );
 
     CREATE TABLE IF NOT EXISTS day_sections (
@@ -400,7 +413,8 @@ app.post('/subscribe', async (req, res) => {
     const { userId, subscription } = req.body;
     await pool.query(
       `INSERT INTO push_subscriptions (user_id, subscription)
-       VALUES ($1, $2)`,
+       VALUES ($1, $2)
+       ON CONFLICT ((subscription->>'endpoint')) DO NOTHING`,
       [userId, JSON.stringify(subscription)]
     );
     res.status(201).json({ ok: true });
@@ -511,10 +525,18 @@ cron.schedule('*/5 * * * *', async () => {
 
 
       if (diff >= 0 && diff < 5 * 60 * 1000) {
+        if (row.last_fired_date === todayStr) {
+          console.log(`[CRON] Daily reminder already fired today for task: ${row.title}, skipping`);
+          continue;
+        }
         await sendPushToUser(
           row.user_id,
           `🔁 ${row.title}`,
           `Daily reminder${row.category && row.category !== 'Uncategorized' ? ' · ' + row.category : ''}`
+        );
+        await pool.query(
+          'UPDATE reminders SET last_fired_date = $1 WHERE id = $2',
+          [todayStr, row.reminder_id]
         );
       }
     }
