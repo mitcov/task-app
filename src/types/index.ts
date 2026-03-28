@@ -41,8 +41,8 @@ export interface Task {
   recurrenceDay?: RecurrenceDay;
   priority: Priority;
   sortOrder: number;
-  lastCompleted?: string;
-  completedDate?: string;
+  lastCompleted?: string | null;
+  completedDate?: string | null;
   notes?: string;
   reminders: Reminder[];
 }

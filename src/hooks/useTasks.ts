@@ -61,7 +61,7 @@ export function useTasks() {
   }, [fetchAll]);
 
   const uncompleteTask = useCallback(async (id: string) => {
-    await api.updateTask(id, { status: 'To Do' });
+    await api.updateTask(id, { status: 'To Do', lastCompleted: null, completedDate: null });
     await fetchAll();
   }, [fetchAll]);
 
