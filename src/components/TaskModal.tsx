@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Task, Priority, Recurrence, RecurrenceDay, Reminder, REMINDER_PRESETS, priorityColor } from '../types';
+import { Task, Priority, Recurrence, RecurrenceDay, Reminder, REMINDER_PRESETS } from '../types';
 
 interface Props {
   task?: Task;
