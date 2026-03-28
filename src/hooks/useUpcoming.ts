@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { Task, DaySection, SectionAssignment, SectionTemplate } from '../types';
 import { api } from '../lib/api';
 import { format } from 'date-fns';
@@ -28,6 +28,7 @@ export function useUpcoming(tasks: Task[], userId: string) {
   }, [userId]);
 
   const today = format(new Date(), 'yyyy-MM-dd');
+  const yesterday = format(new Date(Date.now() - 86400000), 'yyyy-MM-dd');
   const tomorrow = format(new Date(Date.now() + 86400000), 'yyyy-MM-dd');
   const todayNum = new Date().getDay();
   const tomorrowNum = (todayNum + 1) % 7;
@@ -52,14 +53,32 @@ export function useUpcoming(tasks: Task[], userId: string) {
       if (assignedElsewhere.has(task.id)) return false;
       if (task.dueDate === dateStr) return true;
       // Pull overdue tasks (past due date, not completed) into today only
-      if (dateStr === today && task.dueDate && task.dueDate < today) return true;
+      if (dateStr === today && task.dueDate && task.dueDate < today) {
+        // Monthly recurring tasks linger up to 7 days past due
+        if (task.recurrence === 'Monthly') {
+          const daysPastDue = Math.round(
+            (new Date(today).getTime() - new Date(task.dueDate).getTime()) / 86400000
+          );
+          return daysPastDue <= 7;
+        }
+        return true;
+      }
       if (task.recurrence === 'Daily') return true;
       if ((task.recurrence === 'Weekly' || task.recurrence === 'Biweekly') && task.recurrenceDay) {
-        return DAY_MAP[task.recurrenceDay] === dayNum;
+        if (DAY_MAP[task.recurrenceDay] === dayNum) return true;
+        // Linger: show in today's view if yesterday was this task's scheduled day
+        // and the task wasn't completed on or after that day
+        if (dateStr === today) {
+          const prevDayNum = (dayNum - 1 + 7) % 7;
+          if (DAY_MAP[task.recurrenceDay] === prevDayNum) {
+            return !task.completedDate || task.completedDate < yesterday;
+          }
+        }
+        return false;
       }
       return false;
     });
-  }, [tasks, today]);
+  }, [tasks, today, yesterday]);
 
   const fetchUpcoming = useCallback(async () => {
     if (!userId) return;
@@ -285,11 +304,20 @@ export function useUpcoming(tasks: Task[], userId: string) {
     api.deleteSectionTemplate(id).catch(() => fetchUpcoming());
   }, [fetchUpcoming]);
 
+  const todayTasks = useMemo(
+    () => getTasksForDay(todayNum, today, todayAssignments, tomorrowAssignments),
+    [getTasksForDay, todayNum, today, todayAssignments, tomorrowAssignments],
+  );
+  const tomorrowTasks = useMemo(
+    () => getTasksForDay(tomorrowNum, tomorrow, tomorrowAssignments, todayAssignments),
+    [getTasksForDay, tomorrowNum, tomorrow, tomorrowAssignments, todayAssignments],
+  );
+
   return {
     today,
     tomorrow,
-    todayTasks: getTasksForDay(todayNum, today, todayAssignments, tomorrowAssignments),
-    tomorrowTasks: getTasksForDay(tomorrowNum, tomorrow, tomorrowAssignments, todayAssignments),
+    todayTasks,
+    tomorrowTasks,
     todaySections,
     tomorrowSections,
     todayAssignments,

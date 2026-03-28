@@ -126,7 +126,7 @@ function TaskRow({ task, containerId, date, onComplete, onUncomplete, onTaskClic
       <button
         onClick={(e) => { e.stopPropagation(); task.status === 'Done' ? onUncomplete(task.id) : onComplete(task.id); }}
         className={`w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors
-          ${task.status === 'Done' ? 'bg-green-400 border-green-400 text-white hover:bg-red-400 hover:border-red-400' : isOverdue ? 'border-red-400 hover:border-green-400' : 'border-gray-300 hover:border-green-400'}`}
+          ${task.status === 'Done' ? 'bg-green-400 border-green-400 text-white' : isOverdue ? 'border-red-400 hover:border-green-400' : 'border-gray-300 hover:border-green-400'}`}
       >
         {task.status === 'Done' && <span className="text-xs">✓</span>}
       </button>
