@@ -257,6 +257,9 @@ app.patch('/tasks/:id', async (req, res) => {
       lastCompleted, completedDate, notes, reminders
     } = req.body;
 
+    const updateLastCompleted = 'lastCompleted' in req.body;
+    const updateCompletedDate = 'completedDate' in req.body;
+
     const result = await pool.query(
       `UPDATE tasks SET
         title = COALESCE($1, title),
@@ -268,13 +271,14 @@ app.patch('/tasks/:id', async (req, res) => {
         due_date = COALESCE($7::date, due_date),
         reminder_time = COALESCE($8::time, reminder_time),
         sort_order = COALESCE($9, sort_order),
-        last_completed = COALESCE($10::timestamptz, last_completed),
+        last_completed = CASE WHEN $14 THEN $10::timestamptz ELSE last_completed END,
         notes = COALESCE($11, notes),
-        completed_date = COALESCE($12::date, completed_date)
+        completed_date = CASE WHEN $15 THEN $12::date ELSE completed_date END
        WHERE id = $13 RETURNING *`,
       [title, category, status, priority, recurrence, recurrenceDay,
        dueDate || null, reminderTime || null, sortOrder,
-       lastCompleted || null, notes, completedDate || null, id]
+       lastCompleted || null, notes, completedDate || null, id,
+       updateLastCompleted, updateCompletedDate]
     );
 
     const savedReminders = reminders !== undefined
