@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useMemo } from 'react';
+import { format } from 'date-fns';
 import { Task, Category } from '../types';
 import { api } from '../lib/api';
 
@@ -27,7 +28,7 @@ export function useTasks() {
   }, []); // stable — no dependencies needed since api functions don't change
 
   const groupedCategories = useMemo((): Category[] => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = format(new Date(), 'yyyy-MM-dd');
     const taskMap: Record<string, Task[]> = {};
     tasks.forEach(task => {
       // Hide done tasks unless they were completed today (they fade in place until tomorrow)
@@ -55,7 +56,7 @@ export function useTasks() {
   }, [tasks, categories]);
 
   const completeTask = useCallback(async (id: string) => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = format(new Date(), 'yyyy-MM-dd');
     const updates = { status: 'Done' as const, lastCompleted: new Date().toISOString(), completedDate: today };
     setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
     api.updateTask(id, updates).catch(() => fetchAll());

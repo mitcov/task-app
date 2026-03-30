@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { format } from 'date-fns';
 import {
   DndContext,
   pointerWithin,
@@ -104,7 +105,7 @@ function TaskRow({ task, containerId, date, onComplete, onUncomplete, onTaskClic
     opacity: isDragging ? 0.2 : 1,
   };
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = format(new Date(), 'yyyy-MM-dd');
   const isOverdue = task.status !== 'Done' && !!task.dueDate && task.dueDate < today;
   const overdueDays = isOverdue
     ? Math.round((new Date(today).getTime() - new Date(task.dueDate!).getTime()) / (1000 * 60 * 60 * 24))
