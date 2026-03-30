@@ -216,7 +216,7 @@ function SortableSection({
           <div className="relative flex-shrink-0 flex items-center gap-1">
             <button
               onClick={() => setPickerOpen(o => !o)}
-              className="text-gray-300 dark:text-gray-600 hover:text-blue-400 text-sm font-bold leading-none px-1"
+              className="text-gray-300 dark:text-gray-600 hover:text-blue-400 text-sm font-bold px-3 py-2"
               title="Add tasks to section"
             >
               +
@@ -229,7 +229,7 @@ function SortableSection({
               />
             )}
             <button onClick={() => onDelete(section.id)}
-              className="text-gray-200 dark:text-gray-700 hover:text-red-400 text-base leading-none pl-1">
+              className="text-gray-200 dark:text-gray-700 hover:text-red-400 text-base px-3 py-2">
               ×
             </button>
           </div>
