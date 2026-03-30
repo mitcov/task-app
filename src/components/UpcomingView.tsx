@@ -979,11 +979,6 @@ export function UpcomingView({ tasks, userId, onComplete, onUncomplete, onTaskCl
     <p className="text-xs text-gray-400 dark:text-gray-600 text-center py-8">Loading…</p>
   );
 
-  const todayDone = todayTasks.filter(t => t.status === 'Done').length;
-  const todayTotal = todayTasks.length;
-  const todayPending = todayTotal - todayDone;
-  const progress = todayTotal > 0 ? Math.round((todayDone / todayTotal) * 100) : 0;
-
   return (
     <DndContext
       sensors={sensors}
@@ -996,42 +991,6 @@ export function UpcomingView({ tasks, userId, onComplete, onUncomplete, onTaskCl
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
-      {/* Today's Progress Widget */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-4 mb-4 shadow-sm">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Today's Progress</span>
-          {todayTotal > 0 && (
-            <span className="text-xs font-bold text-accent">{progress}%</span>
-          )}
-        </div>
-        {todayTotal === 0 ? (
-          <p className="text-sm text-gray-400 dark:text-gray-500">Nothing scheduled yet</p>
-        ) : (
-          <>
-            <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2 mb-3">
-              <div
-                className="bg-accent rounded-full h-2 transition-all duration-500"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-            <div className="flex gap-4">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
-                <span className="text-xs text-gray-500 dark:text-gray-400">
-                  <span className="font-semibold text-gray-700 dark:text-gray-200">{todayDone}</span> done
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-gray-300 dark:bg-gray-600 flex-shrink-0" />
-                <span className="text-xs text-gray-500 dark:text-gray-400">
-                  <span className="font-semibold text-gray-700 dark:text-gray-200">{todayPending}</span> remaining
-                </span>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-
       <DayBlock
         label="Today" date={today} dayContainerId="day-today"
         tasks={todayTasks} sections={todaySections} assignments={todayAssignments}
