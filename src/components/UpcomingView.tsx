@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { format } from 'date-fns';
 import {
   DndContext,
   pointerWithin,
@@ -104,7 +105,7 @@ function TaskRow({ task, containerId, date, onComplete, onUncomplete, onTaskClic
     opacity: isDragging ? 0.2 : 1,
   };
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = format(new Date(), 'yyyy-MM-dd');
   const isOverdue = task.status !== 'Done' && !!task.dueDate && task.dueDate < today;
   const overdueDays = isOverdue
     ? Math.round((new Date(today).getTime() - new Date(task.dueDate!).getTime()) / (1000 * 60 * 60 * 24))
@@ -152,11 +153,12 @@ function TaskRow({ task, containerId, date, onComplete, onUncomplete, onTaskClic
 // ── Sortable Section ──────────────────────────────────────────────────────────
 
 function SortableSection({
-  section, projectedTasks, date, dayContainerId, activeTask,
-  onRename, onDelete, onComplete, onUncomplete, onTaskClick,
+  section, projectedTasks, looseTasks, date, dayContainerId, activeTask,
+  onRename, onDelete, onComplete, onUncomplete, onTaskClick, onAssignTasks,
 }: {
   section: DaySection;
   projectedTasks: Task[];
+  looseTasks: Task[];
   date: string;
   dayContainerId: string;
   activeTask: Task | null;
@@ -165,9 +167,11 @@ function SortableSection({
   onComplete: (id: string) => void;
   onUncomplete: (id: string) => void;
   onTaskClick: (task: Task) => void;
+  onAssignTasks: (taskIds: string[]) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(section.title);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: `section-${section.id}`, data: { type: 'section', sectionId: section.id, containerId: dayContainerId, date } });
@@ -209,10 +213,26 @@ function SortableSection({
               {section.title}
             </button>
           )}
-          <button onClick={() => onDelete(section.id)}
-            className="text-gray-200 dark:text-gray-700 hover:text-red-400 text-base flex-shrink-0 pl-3">
-            ×
-          </button>
+          <div className="relative flex-shrink-0 flex items-center gap-1">
+            <button
+              onClick={() => setPickerOpen(o => !o)}
+              className="text-gray-300 dark:text-gray-600 hover:text-blue-400 text-sm font-bold leading-none px-1"
+              title="Add tasks to section"
+            >
+              +
+            </button>
+            {pickerOpen && (
+              <SectionTaskPicker
+                looseTasks={looseTasks}
+                onAssign={onAssignTasks}
+                onClose={() => setPickerOpen(false)}
+              />
+            )}
+            <button onClick={() => onDelete(section.id)}
+              className="text-gray-200 dark:text-gray-700 hover:text-red-400 text-base leading-none pl-1">
+              ×
+            </button>
+          </div>
         </div>
         {/* Inner SortableContext — geometry fully isolated from the outer context */}
         <div className="px-3 pt-2 pb-2">
@@ -326,6 +346,64 @@ function AddSectionButton({ date, templates, onAdd, onSaveTemplate, onDeleteTemp
         </>
       )}
     </div>
+  );
+}
+
+// ── Section Task Picker ───────────────────────────────────────────────────────
+
+function SectionTaskPicker({ looseTasks, onAssign, onClose }: {
+  looseTasks: Task[];
+  onAssign: (taskIds: string[]) => void;
+  onClose: () => void;
+}) {
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const toggle = (id: string) =>
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} />
+      <div className="absolute right-0 top-7 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 p-3 z-50 w-64">
+        <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-2">
+          Add tasks to section
+        </p>
+        {looseTasks.length === 0 ? (
+          <p className="text-xs text-gray-400 dark:text-gray-500 py-2 text-center">No loose tasks available</p>
+        ) : (
+          <div className="max-h-48 overflow-y-auto mb-3 space-y-1">
+            {looseTasks.map(task => (
+              <label key={task.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selected.has(task.id)}
+                  onChange={() => toggle(task.id)}
+                  className="rounded flex-shrink-0"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300 truncate">{task.title}</span>
+                <span className={`text-xs ml-auto flex-shrink-0 ${priorityColor(task.priority)}`}>{task.priority}</span>
+              </label>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-2">
+          <button
+            onClick={() => { onAssign(Array.from(selected)); onClose(); }}
+            disabled={selected.size === 0}
+            className="flex-1 bg-accent hover:bg-accent-dark disabled:bg-gray-200 text-white text-sm font-semibold py-2 rounded-xl transition-colors">
+            Add {selected.size > 0 ? `(${selected.size})` : ''}
+          </button>
+          <button onClick={onClose}
+            className="flex-1 border border-gray-200 dark:border-gray-700 text-gray-500 text-sm font-semibold py-2 rounded-xl transition-colors">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -563,7 +641,7 @@ function DayBlock({
   clonedDayLevel, clonedSectionTasks,
   activeTask, activeSection, activeItemDate, overContainerDate,
   onComplete, onUncomplete, onTaskClick, onAddSection, onRenameSection,
-  onDeleteSection, onSaveTemplate, onDeleteTemplate,
+  onDeleteSection, onSaveTemplate, onDeleteTemplate, onAssignToSection,
 }: {
   label: string;
   date: string;
@@ -586,6 +664,7 @@ function DayBlock({
   onDeleteSection: (id: string) => void;
   onSaveTemplate: (title: string) => void;
   onDeleteTemplate: (id: string) => void;
+  onAssignToSection: (sectionId: string, taskIds: string[]) => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -657,11 +736,15 @@ function DayBlock({
                       return aOrd - bOrd;
                     });
                   const projectedTasks = clonedSectionTasks?.get(entry.section.id) ?? canonical;
+                  const looseTasks = dayLevel
+                    .filter(e => e.kind === 'task')
+                    .map(e => (e as { kind: 'task'; task: Task }).task);
                   return (
                     <SortableSection
                       key={entry.section.id}
                       section={entry.section}
                       projectedTasks={projectedTasks}
+                      looseTasks={looseTasks}
                       date={date}
                       dayContainerId={dayContainerId}
                       activeTask={activeTask}
@@ -670,6 +753,7 @@ function DayBlock({
                       onComplete={onComplete}
                       onUncomplete={onUncomplete}
                       onTaskClick={onTaskClick}
+                      onAssignTasks={(ids) => onAssignToSection(entry.section.id, ids)}
                     />
                   );
                 }
@@ -920,6 +1004,13 @@ export function UpcomingView({ tasks, userId, onComplete, onUncomplete, onTaskCl
         onRenameSection={(id, title) => updateSection(id, { title })}
         onDeleteSection={deleteSection}
         onSaveTemplate={addTemplate} onDeleteTemplate={deleteTemplate}
+        onAssignToSection={(sectionId, taskIds) => {
+          const sectionTasks = todayAssignments.filter(a => a.sectionId === sectionId);
+          const maxOrder = sectionTasks.reduce((m, a) => Math.max(m, a.sortOrder), -1);
+          reorderAssignments(taskIds.map((taskId, i) => ({
+            taskId, sectionId, date: today, sortOrder: maxOrder + (i + 1) * 10,
+          })));
+        }}
       />
       <DayBlock
         label="Tomorrow" date={tomorrow} dayContainerId="day-tomorrow"
@@ -934,6 +1025,13 @@ export function UpcomingView({ tasks, userId, onComplete, onUncomplete, onTaskCl
         onRenameSection={(id, title) => updateSection(id, { title })}
         onDeleteSection={deleteSection}
         onSaveTemplate={addTemplate} onDeleteTemplate={deleteTemplate}
+        onAssignToSection={(sectionId, taskIds) => {
+          const sectionTasks = tomorrowAssignments.filter(a => a.sectionId === sectionId);
+          const maxOrder = sectionTasks.reduce((m, a) => Math.max(m, a.sortOrder), -1);
+          reorderAssignments(taskIds.map((taskId, i) => ({
+            taskId, sectionId, date: tomorrow, sortOrder: maxOrder + (i + 1) * 10,
+          })));
+        }}
       />
 
       <DragOverlay>

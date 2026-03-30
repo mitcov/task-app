@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { format } from 'date-fns';
 import { Task, Priority, Recurrence, RecurrenceDay, Reminder, REMINDER_PRESETS } from '../types';
 
 interface Props {
@@ -36,7 +37,7 @@ export function TaskModal({ task, existingCategories, lockedCategory, onSave, on
     if (type === 'once') {
       setReminders([...reminders, { type: 'once', offsetMinutes: 1440, label: '1 day before' }]);
     } else {
-      const today = new Date().toISOString().split('T')[0];
+      const today = format(new Date(), 'yyyy-MM-dd');
       setReminders([...reminders, { type: 'daily', dailyTime: '09:00', dailyStart: today }]);
     }
   };
