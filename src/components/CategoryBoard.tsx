@@ -141,11 +141,11 @@ function CategoryColumn({ category, onComplete, onTaskClick, onEditCategory, onQ
         </button>
 
         <button onClick={() => onQuickAdd(category.name)}
-          className="text-gray-300 hover:text-blue-400 transition-colors text-lg font-light px-2 leading-none">
+          className="text-gray-300 hover:text-blue-400 transition-colors text-lg font-light px-3 py-2">
           +
         </button>
         <button onClick={() => onEditCategory(category)}
-          className="text-gray-300 hover:text-gray-500 transition-colors text-sm px-2">
+          className="text-gray-300 hover:text-gray-500 transition-colors text-sm px-3 py-2">
           ✎
         </button>
       </div>

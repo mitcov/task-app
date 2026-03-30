@@ -76,7 +76,7 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* Header */}
-      <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-5 pt-12 pb-4 sticky top-0 z-40">
+      <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-5 pt-6 pb-4 sticky top-0 z-40">
         <div className="flex items-center justify-between mb-4">
           <button onClick={() => setShowUserMenu(true)} className="flex items-center gap-2 active:opacity-70 transition-opacity">
             <span className="text-2xl">{user.emoji}</span>
