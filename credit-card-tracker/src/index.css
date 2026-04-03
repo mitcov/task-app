@@ -1,0 +1,88 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+input, select, textarea {
+  font-size: 16px !important;
+}
+
+/* ── Theme CSS variables ─────────────────────────────────────────────── */
+
+/* Classic: light mode, blue accent, system sans */
+:root {
+  --accent:        59 130 246;   /* blue-500   */
+  --accent-dark:   37  99 235;   /* blue-600   */
+  --accent-light: 219 234 254;   /* blue-100   */
+  --accent-subtle: 96 165 250;   /* blue-400   */
+  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* Midnight: dark mode, violet accent, Space Grotesk */
+[data-theme="midnight"] {
+  --accent:        139  92 246;  /* violet-500 */
+  --accent-dark:   124  58 237;  /* violet-600 */
+  --accent-light:   46  16 101;  /* violet-950 */
+  --accent-subtle: 167 139 250;  /* violet-400 */
+  --font-body: 'Space Grotesk', sans-serif;
+}
+
+/* Sunset: light mode, amber accent, Nunito */
+[data-theme="sunset"] {
+  --accent:        245 158  11;  /* amber-500  */
+  --accent-dark:   217 119   6;  /* amber-600  */
+  --accent-light:  255 251 235;  /* amber-50   */
+  --accent-subtle: 251 191  36;  /* amber-400  */
+  --font-body: 'Nunito', sans-serif;
+}
+
+/* Forest: light mode, emerald accent */
+[data-theme="forest"] {
+  --accent:         16 185 129;  /* emerald-500 */
+  --accent-dark:     5 150 105;  /* emerald-600 */
+  --accent-light:  209 250 229;  /* emerald-100 */
+  --accent-subtle:  52 211 153;  /* emerald-400 */
+  --font-body: 'Inter', sans-serif;
+}
+
+/* ── Base body styles ────────────────────────────────────────────────── */
+
+@layer base {
+  body {
+    font-family: var(--font-body);
+    @apply bg-gray-50 dark:bg-gray-950;
+  }
+}
+
+/* ── Per-theme border radius personality ─────────────────────────────── */
+
+/* Midnight: sharp, angular */
+[data-theme="midnight"] .rounded-lg  { border-radius: 0.25rem; }
+[data-theme="midnight"] .rounded-xl  { border-radius: 0.375rem; }
+[data-theme="midnight"] .rounded-2xl { border-radius: 0.5rem; }
+[data-theme="midnight"] .rounded-3xl { border-radius: 0.75rem; }
+
+/* Sunset: extra puffy / bubbly */
+[data-theme="sunset"] .rounded-lg  { border-radius: 1rem; }
+[data-theme="sunset"] .rounded-xl  { border-radius: 1.25rem; }
+[data-theme="sunset"] .rounded-2xl { border-radius: 1.75rem; }
+[data-theme="sunset"] .rounded-3xl { border-radius: 2.5rem; }
+
+/* Forest: slightly softer than Classic */
+[data-theme="forest"] .rounded-lg  { border-radius: 0.625rem; }
+[data-theme="forest"] .rounded-xl  { border-radius: 0.875rem; }
+[data-theme="forest"] .rounded-2xl { border-radius: 1.25rem; }
+[data-theme="forest"] .rounded-3xl { border-radius: 1.75rem; }
+
+/* ── Per-theme background accent glow ───────────────────────────────── */
+
+[data-theme="midnight"] body {
+  background-image: radial-gradient(ellipse at 50% -10%, rgba(139, 92, 246, 0.12) 0%, transparent 55%);
+}
+
+[data-theme="sunset"] body {
+  background-image: radial-gradient(ellipse at 50% -10%, rgba(245, 158, 11, 0.08) 0%, transparent 55%);
+}
+
+[data-theme="forest"] body {
+  background-image: radial-gradient(ellipse at 50% -10%, rgba(16, 185, 129, 0.07) 0%, transparent 55%);
+}
