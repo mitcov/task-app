@@ -835,6 +835,22 @@ export function UpcomingView({ tasks, userId, onComplete, onUncomplete, onTaskCl
     onTodayPendingCount?.(todayTasks.filter(t => t.status !== 'Done').length);
   }, [todayTasks, onTodayPendingCount]);
 
+  // Auto-reset recurring tasks that are appearing fresh (completed on a previous occurrence).
+  // Runs when today's or tomorrow's task lists change; resets tasks so they show unchecked.
+  useEffect(() => {
+    const seen = new Set<string>();
+    const check = (task: Task, cutoff: string) => {
+      if (task.status === 'Done' && task.recurrence !== 'None' && task.completedDate && task.completedDate < cutoff) {
+        if (!seen.has(task.id)) {
+          seen.add(task.id);
+          onUncomplete(task.id);
+        }
+      }
+    };
+    todayTasks.forEach(t => check(t, today));
+    tomorrowTasks.forEach(t => check(t, tomorrow));
+  }, [todayTasks, tomorrowTasks, today, tomorrow, onUncomplete]);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),

@@ -70,13 +70,16 @@ export function useUpcoming(tasks: Task[], userId: string) {
       }
       if (task.recurrence === 'Daily') return true;
       if ((task.recurrence === 'Weekly' || task.recurrence === 'Biweekly') && task.recurrenceDay) {
-        if (DAY_MAP[task.recurrenceDay] === dayNum) return true;
+        // Biweekly tasks require 14 days since last completion before reappearing
+        const biweeklyReady = task.recurrence !== 'Biweekly' || !task.completedDate ||
+          Math.round((new Date(dateStr).getTime() - new Date(task.completedDate).getTime()) / 86400000) >= 14;
+        if (DAY_MAP[task.recurrenceDay] === dayNum) return biweeklyReady;
         // Linger: show in today's view if yesterday was this task's scheduled day
         // and the task wasn't completed on or after that day
         if (dateStr === today) {
           const prevDayNum = (dayNum - 1 + 7) % 7;
           if (DAY_MAP[task.recurrenceDay] === prevDayNum) {
-            return !task.completedDate || task.completedDate < yesterday;
+            return biweeklyReady && (!task.completedDate || task.completedDate < yesterday);
           }
         }
         return false;

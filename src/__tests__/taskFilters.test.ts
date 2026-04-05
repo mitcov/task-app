@@ -61,7 +61,9 @@ function filterForDayView(
     if (dateStr === today && task.dueDate && task.dueDate < today) return true;
     if (task.recurrence === 'Daily') return true;
     if ((task.recurrence === 'Weekly' || task.recurrence === 'Biweekly') && task.recurrenceDay) {
-      return DAY_MAP[task.recurrenceDay] === dayNum;
+      const biweeklyReady = task.recurrence !== 'Biweekly' || !task.completedDate ||
+        Math.round((new Date(dateStr).getTime() - new Date(task.completedDate).getTime()) / 86400000) >= 14;
+      return DAY_MAP[task.recurrenceDay] === dayNum && biweeklyReady;
     }
     return false;
   });
@@ -239,10 +241,23 @@ describe('filterForDayView', () => {
       expect(filterForDayView([task], 0, TOMORROW, TODAY)).toHaveLength(0);
     });
 
-    it('biweekly task appears on correct day', () => {
+    it('biweekly task appears on correct day when never completed', () => {
       const task = makeTask({ recurrence: 'Biweekly', recurrenceDay: 'Sunday' });
       expect(filterForDayView([task], 0, TOMORROW, TODAY)).toHaveLength(1);
       expect(filterForDayView([task], 6, TODAY, TODAY)).toHaveLength(0);
+    });
+
+    it('biweekly task does NOT reappear within 14 days of completion', () => {
+      // Completed 7 days ago (last Sunday) — too soon
+      const task = makeTask({ recurrence: 'Biweekly', recurrenceDay: 'Sunday', completedDate: LAST_WEEK });
+      expect(filterForDayView([task], 0, TOMORROW, TODAY)).toHaveLength(0);
+    });
+
+    it('biweekly task reappears after 14 days', () => {
+      // Completed 14 days ago
+      const twoWeeksAgo = '2026-03-14';
+      const task = makeTask({ recurrence: 'Biweekly', recurrenceDay: 'Sunday', completedDate: twoWeeksAgo });
+      expect(filterForDayView([task], 0, TOMORROW, TODAY)).toHaveLength(1);
     });
 
     it('daily done task reappears next day after completion', () => {
