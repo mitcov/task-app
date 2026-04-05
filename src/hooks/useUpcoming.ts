@@ -46,8 +46,13 @@ export function useUpcoming(tasks: Task[], userId: string) {
     const assignedElsewhere = new Set(otherAssignments.map(a => a.taskId));
     return tasks.filter(task => {
       if (task.status === 'Done') {
-        // Today-completed tasks stay visible in today's view only
-        return task.completedDate === dateStr && dateStr === today;
+        // Recurring tasks completed on a previous occurrence reappear on schedule
+        if (task.recurrence !== 'None' && task.completedDate && task.completedDate < dateStr) {
+          // fall through to recurrence/due-date logic below
+        } else {
+          // Non-recurring or same-day completion: visible in today's view only
+          return task.completedDate === dateStr && dateStr === today;
+        }
       }
       if (assignedHere.has(task.id)) return true;
       if (assignedElsewhere.has(task.id)) return false;

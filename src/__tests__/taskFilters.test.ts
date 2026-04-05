@@ -49,7 +49,11 @@ function filterForDayView(
   const assignedElsewhere = new Set(assignedElsewhereIds);
   return tasks.filter(task => {
     if (task.status === 'Done') {
-      return task.completedDate === dateStr && dateStr === today;
+      if (task.recurrence !== 'None' && task.completedDate && task.completedDate < dateStr) {
+        // fall through
+      } else {
+        return task.completedDate === dateStr && dateStr === today;
+      }
     }
     if (assignedHere.has(task.id)) return true;
     if (assignedElsewhere.has(task.id)) return false;
@@ -241,10 +245,21 @@ describe('filterForDayView', () => {
       expect(filterForDayView([task], 6, TODAY, TODAY)).toHaveLength(0);
     });
 
-    it('daily done task does not appear (completed today → shown via completedDate, not recurrence)', () => {
+    it('daily done task reappears next day after completion', () => {
       const task = makeTask({ recurrence: 'Daily', status: 'Done', completedDate: YESTERDAY });
-      // Completed yesterday → hidden
-      expect(filterForDayView([task], TODAY_DAY_NUM, TODAY, TODAY)).toHaveLength(0);
+      // Completed yesterday → reappears today
+      expect(filterForDayView([task], TODAY_DAY_NUM, TODAY, TODAY)).toHaveLength(1);
+    });
+
+    it('weekly done task reappears on its scheduled day the next week', () => {
+      // Saturday = 6 (TODAY_DAY_NUM), completed last week
+      const task = makeTask({ recurrence: 'Weekly', recurrenceDay: 'Saturday', status: 'Done', completedDate: LAST_WEEK });
+      expect(filterForDayView([task], TODAY_DAY_NUM, TODAY, TODAY)).toHaveLength(1);
+    });
+
+    it('weekly done task completed today does not appear in tomorrow view', () => {
+      const task = makeTask({ recurrence: 'Weekly', recurrenceDay: 'Saturday', status: 'Done', completedDate: TODAY });
+      expect(filterForDayView([task], TOMORROW_DAY_NUM, TOMORROW, TODAY)).toHaveLength(0);
     });
   });
 
