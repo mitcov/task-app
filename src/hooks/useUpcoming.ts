@@ -8,6 +8,18 @@ const DAY_MAP: Record<string, number> = {
   Thursday: 4, Friday: 5, Saturday: 6,
 };
 
+// Minimum days that must pass after completion before a recurring task reappears.
+// Returns 0 for types where the schedule itself enforces the gap (Daily, Weekly).
+function minIntervalDays(recurrence: string): number {
+  if (recurrence === 'Biweekly') return 14;
+  if (recurrence === 'Monthly') return 28;
+  return 0;
+}
+
+function daysBetween(a: string, b: string): number {
+  return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000);
+}
+
 export function useUpcoming(tasks: Task[], userId: string) {
   const [todaySections, setTodaySections] = useState<DaySection[]>([]);
   const [tomorrowSections, setTomorrowSections] = useState<DaySection[]>([]);
@@ -48,6 +60,8 @@ export function useUpcoming(tasks: Task[], userId: string) {
       if (task.status === 'Done') {
         // Recurring tasks completed on a previous occurrence reappear on schedule
         if (task.recurrence !== 'None' && task.completedDate && task.completedDate < dateStr) {
+          const minDays = minIntervalDays(task.recurrence);
+          if (minDays > 0 && daysBetween(task.completedDate, dateStr) < minDays) return false;
           // fall through to recurrence/due-date logic below
         } else {
           // Non-recurring or same-day completion: visible in today's view only
@@ -70,13 +84,16 @@ export function useUpcoming(tasks: Task[], userId: string) {
       }
       if (task.recurrence === 'Daily') return true;
       if ((task.recurrence === 'Weekly' || task.recurrence === 'Biweekly') && task.recurrenceDay) {
-        if (DAY_MAP[task.recurrenceDay] === dayNum) return true;
+        const minDays = minIntervalDays(task.recurrence);
+        const intervalReady = minDays === 0 || !task.completedDate ||
+          daysBetween(task.completedDate, dateStr) >= minDays;
+        if (DAY_MAP[task.recurrenceDay] === dayNum) return intervalReady;
         // Linger: show in today's view if yesterday was this task's scheduled day
         // and the task wasn't completed on or after that day
         if (dateStr === today) {
           const prevDayNum = (dayNum - 1 + 7) % 7;
           if (DAY_MAP[task.recurrenceDay] === prevDayNum) {
-            return !task.completedDate || task.completedDate < yesterday;
+            return intervalReady && (!task.completedDate || task.completedDate < yesterday);
           }
         }
         return false;

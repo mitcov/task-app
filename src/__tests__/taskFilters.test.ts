@@ -36,6 +36,16 @@ const DAY_MAP: Record<string, number> = {
   Thursday: 4, Friday: 5, Saturday: 6,
 };
 
+function minIntervalDays(recurrence: string): number {
+  if (recurrence === 'Biweekly') return 14;
+  if (recurrence === 'Monthly') return 28;
+  return 0;
+}
+
+function daysBetween(a: string, b: string): number {
+  return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000);
+}
+
 // Mirrors the getTasksForDay logic in useUpcoming
 function filterForDayView(
   tasks: Task[],
@@ -50,6 +60,8 @@ function filterForDayView(
   return tasks.filter(task => {
     if (task.status === 'Done') {
       if (task.recurrence !== 'None' && task.completedDate && task.completedDate < dateStr) {
+        const minDays = minIntervalDays(task.recurrence);
+        if (minDays > 0 && daysBetween(task.completedDate, dateStr) < minDays) return false;
         // fall through
       } else {
         return task.completedDate === dateStr && dateStr === today;
@@ -61,7 +73,9 @@ function filterForDayView(
     if (dateStr === today && task.dueDate && task.dueDate < today) return true;
     if (task.recurrence === 'Daily') return true;
     if ((task.recurrence === 'Weekly' || task.recurrence === 'Biweekly') && task.recurrenceDay) {
-      return DAY_MAP[task.recurrenceDay] === dayNum;
+      const minDays = minIntervalDays(task.recurrence);
+      const intervalReady = minDays === 0 || !task.completedDate || daysBetween(task.completedDate, dateStr) >= minDays;
+      return DAY_MAP[task.recurrenceDay] === dayNum && intervalReady;
     }
     return false;
   });
@@ -239,10 +253,35 @@ describe('filterForDayView', () => {
       expect(filterForDayView([task], 0, TOMORROW, TODAY)).toHaveLength(0);
     });
 
-    it('biweekly task appears on correct day', () => {
+    it('biweekly task appears on correct day when never completed', () => {
       const task = makeTask({ recurrence: 'Biweekly', recurrenceDay: 'Sunday' });
       expect(filterForDayView([task], 0, TOMORROW, TODAY)).toHaveLength(1);
       expect(filterForDayView([task], 6, TODAY, TODAY)).toHaveLength(0);
+    });
+
+    it('biweekly task does NOT reappear within 14 days of completion', () => {
+      // Completed 7 days ago (last Sunday) — too soon
+      const task = makeTask({ recurrence: 'Biweekly', recurrenceDay: 'Sunday', completedDate: LAST_WEEK });
+      expect(filterForDayView([task], 0, TOMORROW, TODAY)).toHaveLength(0);
+    });
+
+    it('biweekly task reappears after 14 days', () => {
+      const twoWeeksAgo = '2026-03-14';
+      const task = makeTask({ recurrence: 'Biweekly', recurrenceDay: 'Sunday', completedDate: twoWeeksAgo });
+      expect(filterForDayView([task], 0, TOMORROW, TODAY)).toHaveLength(1);
+    });
+
+    it('monthly done task does NOT reappear within 28 days', () => {
+      const task = makeTask({ recurrence: 'Monthly', status: 'Done', dueDate: LAST_WEEK, completedDate: LAST_WEEK });
+      // 7 days since completion → too soon
+      expect(filterForDayView([task], TODAY_DAY_NUM, TODAY, TODAY)).toHaveLength(0);
+    });
+
+    it('monthly done task reappears after 28 days when due again today', () => {
+      // Completed last month (29 days ago), due again today
+      const twentyNineDaysAgo = '2026-02-27';
+      const task = makeTask({ recurrence: 'Monthly', status: 'Done', dueDate: TODAY, completedDate: twentyNineDaysAgo });
+      expect(filterForDayView([task], TODAY_DAY_NUM, TODAY, TODAY)).toHaveLength(1);
     });
 
     it('daily done task reappears next day after completion', () => {
