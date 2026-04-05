@@ -31,8 +31,9 @@ export function useTasks() {
     const today = format(new Date(), 'yyyy-MM-dd');
     const taskMap: Record<string, Task[]> = {};
     tasks.forEach(task => {
-      // Hide done tasks unless they were completed today (they fade in place until tomorrow)
-      if (task.status === 'Done' && task.completedDate !== today) return;
+      // Hide done tasks unless completed today; recurring tasks reappear after their occurrence
+      const isRecurringPastOccurrence = task.recurrence !== 'None' && task.completedDate != null && task.completedDate < today;
+      if (task.status === 'Done' && !isRecurringPastOccurrence && task.completedDate !== today) return;
       if (!taskMap[task.category]) taskMap[task.category] = [];
       taskMap[task.category].push(task);
     });
