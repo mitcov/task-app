@@ -1,4 +1,5 @@
 require('dotenv').config();
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
@@ -755,6 +756,14 @@ app.delete('/section-templates/:id', async (req, res) => {
   }
 });
 
+
+// ── Static Frontend ───────────────────────────────────────────────────────────
+
+const publicDir = path.join(__dirname, 'public');
+app.use(express.static(publicDir));
+app.get('/*path', (req, res) => {
+  res.sendFile(path.join(publicDir, 'index.html'));
+});
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 
