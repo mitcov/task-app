@@ -1,0 +1,14 @@
+services:
+  task-app:
+    build: .
+    container_name: task-app
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    labels:
+      - "homepage.group=Apps"
+      - "homepage.name=Tasks"
+      - "homepage.icon=mdi-clipboard-check"
+      - "homepage.href=https://tasks.mitcov.com"
+      - "homepage.description=Personal task management app"
+      - "homepage.server=my-server"
