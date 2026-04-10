@@ -5,6 +5,7 @@ self.addEventListener('push', function(event) {
       body: data.body || 'You have a task reminder',
       icon: '/icon.svg',
       badge: '/icon.svg',
+      vibrate: [200, 100, 200],
     })
   );
 });

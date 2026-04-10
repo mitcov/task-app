@@ -486,9 +486,12 @@ cron.schedule('*/5 * * * *', async () => {
     for (const row of onceReminders.rows) {
       const dueDate = row.due_date; // already a 'YYYY-MM-DD' string from pg type parser
       const [hours, minutes] = row.reminder_time.split(':').map(Number);
-      // Build the datetime in Eastern time explicitly
+      // Build the datetime string representing the user's intended Eastern time
       const taskDateTimeStr = `${dueDate}T${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:00`;
-      const taskDateTime = new Date(new Date(taskDateTimeStr).toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      // Parse as Eastern: treat the string as UTC to get components, compute ET offset, apply it
+      const refUTC = new Date(taskDateTimeStr + 'Z');
+      const easternAtRef = new Date(refUTC.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      const taskDateTime = new Date(refUTC.getTime() + (refUTC - easternAtRef));
       const reminderDateTime = new Date(taskDateTime.getTime() - row.offset_minutes * 60000);
       const diff = reminderDateTime.getTime() - now.getTime();
       console.log(`[CRON] Task: ${row.title}, reminderAt: ${reminderDateTime.toISOString()}, now: ${now.toISOString()}, diff: ${Math.round(diff/1000)}s`);
@@ -520,7 +523,10 @@ cron.schedule('*/5 * * * *', async () => {
     for (const row of dailyReminders.rows) {
       const [hours, minutes] = row.daily_time.split(':').map(Number);
       const fireTimeStr = `${todayStr}T${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:00`;
-      const fireTime = new Date(new Date(fireTimeStr).toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      // Parse as Eastern: treat the string as UTC to get components, compute ET offset, apply it
+      const refUTC = new Date(fireTimeStr + 'Z');
+      const easternAtRef = new Date(refUTC.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      const fireTime = new Date(refUTC.getTime() + (refUTC - easternAtRef));
       const diff = fireTime.getTime() - now.getTime();
       console.log(`[CRON] Daily task: ${row.title}, fireAt: ${fireTime.toISOString()}, now: ${now.toISOString()}, diff: ${Math.round(diff/1000)}s`);
 
