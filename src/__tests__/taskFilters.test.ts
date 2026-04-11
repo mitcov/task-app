@@ -57,14 +57,28 @@ function filterForDayView(
 ): Task[] {
   const assignedHere = new Set(assignedHereIds);
   const assignedElsewhere = new Set(assignedElsewhereIds);
+  const yesterday = (() => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().slice(0, 10);
+  })();
   return tasks.filter(task => {
     if (task.status === 'Done') {
       if (task.recurrence !== 'None' && task.completedDate && task.completedDate < dateStr) {
+        // Daily tasks completed today don't bleed into tomorrow
+        if (task.completedDate === today && task.recurrence === 'Daily') return false;
         const minDays = minIntervalDays(task.recurrence);
         if (minDays > 0 && daysBetween(task.completedDate, dateStr) < minDays) return false;
         // fall through
       } else {
-        return task.completedDate === dateStr && dateStr === today;
+        // Same-day completion: visible in today's view only.
+        // Early completions (weekly/biweekly scheduled for tomorrow) stay in tomorrow's section.
+        if (task.completedDate !== dateStr || dateStr !== today) return false;
+        const scheduledDayNum = task.recurrenceDay != null ? DAY_MAP[task.recurrenceDay] : -1;
+        const isEarlyCompletion =
+          (task.recurrence === 'Weekly' || task.recurrence === 'Biweekly') &&
+          scheduledDayNum === (dayNum + 1) % 7;
+        return !isEarlyCompletion;
       }
     }
     if (assignedHere.has(task.id)) return true;
@@ -75,7 +89,18 @@ function filterForDayView(
     if ((task.recurrence === 'Weekly' || task.recurrence === 'Biweekly') && task.recurrenceDay) {
       const minDays = minIntervalDays(task.recurrence);
       const intervalReady = minDays === 0 || !task.completedDate || daysBetween(task.completedDate, dateStr) >= minDays;
-      return DAY_MAP[task.recurrenceDay] === dayNum && intervalReady;
+      if (DAY_MAP[task.recurrenceDay] === dayNum) return intervalReady;
+      // Linger: yesterday was the scheduled day and not completed this occurrence
+      if (dateStr === today) {
+        const prevDayNum = (dayNum - 1 + 7) % 7;
+        if (DAY_MAP[task.recurrenceDay] === prevDayNum) {
+          const occurrenceInterval = task.recurrence === 'Biweekly' ? 14 : 7;
+          const completedThisOccurrence =
+            !!task.completedDate && daysBetween(task.completedDate, yesterday) < occurrenceInterval;
+          return intervalReady && !completedThisOccurrence;
+        }
+      }
+      return false;
     }
     return false;
   });
@@ -299,6 +324,48 @@ describe('filterForDayView', () => {
     it('weekly done task completed today does not appear in tomorrow view', () => {
       const task = makeTask({ recurrence: 'Weekly', recurrenceDay: 'Saturday', status: 'Done', completedDate: TODAY });
       expect(filterForDayView([task], TOMORROW_DAY_NUM, TOMORROW, TODAY)).toHaveLength(0);
+    });
+
+    it('daily done task completed today does not appear in tomorrow view', () => {
+      const task = makeTask({ recurrence: 'Daily', status: 'Done', completedDate: TODAY });
+      expect(filterForDayView([task], TOMORROW_DAY_NUM, TOMORROW, TODAY)).toHaveLength(0);
+    });
+  });
+
+  describe('early completion (completing a recurring task before its scheduled day)', () => {
+    // TODAY = Saturday (day 6), TOMORROW = Sunday (day 0)
+
+    it('weekly Sunday task completed today (Saturday) appears in tomorrow (Sunday) view as Done', () => {
+      const task = makeTask({ recurrence: 'Weekly', recurrenceDay: 'Sunday', status: 'Done', completedDate: TODAY });
+      expect(filterForDayView([task], TOMORROW_DAY_NUM, TOMORROW, TODAY)).toHaveLength(1);
+    });
+
+    it('weekly Sunday task completed today (Saturday) does NOT appear in today (Saturday) view', () => {
+      const task = makeTask({ recurrence: 'Weekly', recurrenceDay: 'Sunday', status: 'Done', completedDate: TODAY });
+      expect(filterForDayView([task], TODAY_DAY_NUM, TODAY, TODAY)).toHaveLength(0);
+    });
+
+    it('weekly Saturday task completed today still appears in today view (scheduled for today, not early)', () => {
+      const task = makeTask({ recurrence: 'Weekly', recurrenceDay: 'Saturday', status: 'Done', completedDate: TODAY });
+      expect(filterForDayView([task], TODAY_DAY_NUM, TODAY, TODAY)).toHaveLength(1);
+    });
+
+    it('weekly Sunday task completed today does NOT linger into Monday', () => {
+      // today=Monday(1), yesterday=Sunday. task completed on Saturday.
+      // daysBetween(Saturday, Sunday)=1 < 7 → completedThisOccurrence → no linger
+      const MON = '2026-03-30';
+      const task = makeTask({ recurrence: 'Weekly', recurrenceDay: 'Sunday', status: 'Done', completedDate: TODAY });
+      expect(filterForDayView([task], 1, MON, MON)).toHaveLength(0);
+    });
+
+    it('weekly Sunday task completed last week (7+ days ago) DOES linger into Monday', () => {
+      const MON = '2026-03-30'; // Monday
+      // Completed 8 days ago = previous occurrence → should linger if not completed this week
+      const EIGHT_DAYS_AGO = '2026-03-22';
+      const task = makeTask({ recurrence: 'Weekly', recurrenceDay: 'Sunday', status: 'Done', completedDate: EIGHT_DAYS_AGO });
+      // completedDate is 8 days before yesterday(Sunday March 29) → daysBetween=8 >= 7 → linger allowed
+      // but intervalReady: minDays=0 → true. So it lingers as Done.
+      expect(filterForDayView([task], 1, MON, MON)).toHaveLength(1);
     });
   });
 

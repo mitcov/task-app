@@ -837,16 +837,35 @@ export function UpcomingView({ tasks, userId, onComplete, onUncomplete, onTaskCl
 
   // Auto-reset recurring tasks that are appearing fresh (completed on a previous occurrence).
   // Runs when today's or tomorrow's task lists change; resets tasks so they show unchecked.
+  // A task is from a previous occurrence only if it was completed at least one full occurrence
+  // interval ago (7 days for weekly, 14 for biweekly, 28 for monthly, 1 for daily).
+  // Tasks completed within the current occurrence window (e.g. a Sunday task done on Saturday)
+  // are intentional early completions and must not be reset.
   useEffect(() => {
     const seen = new Set<string>();
-    const check = (task: Task, cutoff: string) => {
-      if (task.status === 'Done' && task.recurrence !== 'None' && task.completedDate && task.completedDate < cutoff) {
-        if (!seen.has(task.id)) {
+
+    function occurrenceInterval(recurrence: string): number {
+      if (recurrence === 'Daily') return 1;
+      if (recurrence === 'Weekly') return 7;
+      if (recurrence === 'Biweekly') return 14;
+      if (recurrence === 'Monthly') return 28;
+      return Infinity;
+    }
+    function gapDays(a: string, b: string): number {
+      return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000);
+    }
+
+    const check = (task: Task, dateStr: string) => {
+      if (task.status === 'Done' && task.recurrence !== 'None' && task.completedDate) {
+        const gap = gapDays(task.completedDate, dateStr);
+        const interval = occurrenceInterval(task.recurrence);
+        if (gap >= interval && !seen.has(task.id)) {
           seen.add(task.id);
           onUncomplete(task.id);
         }
       }
     };
+
     todayTasks.forEach(t => check(t, today));
     tomorrowTasks.forEach(t => check(t, tomorrow));
   }, [todayTasks, tomorrowTasks, today, tomorrow, onUncomplete]);

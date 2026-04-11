@@ -60,12 +60,21 @@ export function useUpcoming(tasks: Task[], userId: string) {
       if (task.status === 'Done') {
         // Recurring tasks completed on a previous occurrence reappear on schedule
         if (task.recurrence !== 'None' && task.completedDate && task.completedDate < dateStr) {
+          // Daily tasks completed today are done for today's occurrence only; don't bleed into tomorrow
+          if (task.completedDate === today && task.recurrence === 'Daily') return false;
           const minDays = minIntervalDays(task.recurrence);
           if (minDays > 0 && daysBetween(task.completedDate, dateStr) < minDays) return false;
           // fall through to recurrence/due-date logic below
         } else {
-          // Non-recurring or same-day completion: visible in today's view only
-          return task.completedDate === dateStr && dateStr === today;
+          // Non-recurring or same-day completion: visible in today's view only.
+          // Exception: weekly/biweekly tasks whose scheduled day is tomorrow are early
+          // completions — keep them in tomorrow's section, not today's.
+          if (task.completedDate !== dateStr || dateStr !== today) return false;
+          const scheduledDayNum = task.recurrenceDay != null ? DAY_MAP[task.recurrenceDay] : -1;
+          const isEarlyCompletion =
+            (task.recurrence === 'Weekly' || task.recurrence === 'Biweekly') &&
+            scheduledDayNum === (dayNum + 1) % 7;
+          return !isEarlyCompletion;
         }
       }
       if (assignedHere.has(task.id)) return true;
@@ -89,18 +98,22 @@ export function useUpcoming(tasks: Task[], userId: string) {
           daysBetween(task.completedDate, dateStr) >= minDays;
         if (DAY_MAP[task.recurrenceDay] === dayNum) return intervalReady;
         // Linger: show in today's view if yesterday was this task's scheduled day
-        // and the task wasn't completed on or after that day
+        // and the task was not completed during this occurrence window.
+        // "This occurrence" = within the last 7 days (weekly) or 14 days (biweekly).
         if (dateStr === today) {
           const prevDayNum = (dayNum - 1 + 7) % 7;
           if (DAY_MAP[task.recurrenceDay] === prevDayNum) {
-            return intervalReady && (!task.completedDate || task.completedDate < yesterday);
+            const occurrenceInterval = task.recurrence === 'Biweekly' ? 14 : 7;
+            const completedThisOccurrence =
+              !!task.completedDate && daysBetween(task.completedDate, yesterday) < occurrenceInterval;
+            return intervalReady && !completedThisOccurrence;
           }
         }
         return false;
       }
       return false;
     });
-  }, [tasks, today, yesterday]);
+  }, [tasks, today, yesterday, tomorrowNum]);
 
   const fetchUpcoming = useCallback(async () => {
     if (!userId) return;
