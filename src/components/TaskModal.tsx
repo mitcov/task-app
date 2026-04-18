@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { format } from 'date-fns';
 import { Task, Priority, Recurrence, RecurrenceDay, Reminder, REMINDER_PRESETS } from '../types';
 
@@ -24,6 +24,14 @@ export function TaskModal({ task, existingCategories, lockedCategory, defaultDue
   const [recurrence, setRecurrence] = useState<Recurrence>(task?.recurrence || 'None');
   const [recurrenceDay, setRecurrenceDay] = useState<RecurrenceDay>(task?.recurrenceDay || 'Sunday');
   const [dueDate, setDueDate] = useState(task?.dueDate ? task.dueDate.split('T')[0] : (defaultDueDate || ''));
+  const dateInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const input = dateInputRef.current;
+    if (!input) return;
+    const handler = () => setDueDate(input.value);
+    input.addEventListener('change', handler);
+    return () => input.removeEventListener('change', handler);
+  }, []);
   const [reminderTime, setReminderTime] = useState(task?.reminderTime || '');
   const [reminders, setReminders] = useState<Reminder[]>(task?.reminders || []);
   const [notes, setNotes] = useState(task?.notes || '');
@@ -208,6 +216,7 @@ export function TaskModal({ task, existingCategories, lockedCategory, defaultDue
             </div>
             <div className="overflow-hidden rounded-xl">
               <input
+                ref={dateInputRef}
                 type="date"
                 value={dueDate}
                 onChange={e => setDueDate(e.target.value)}
