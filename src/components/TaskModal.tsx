@@ -192,9 +192,20 @@ export function TaskModal({ task, existingCategories, lockedCategory, defaultDue
 
           {/* Due Date */}
           <div>
-            <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1 block">
-              Due Date (optional)
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                Due Date (optional)
+              </label>
+              {dueDate && (
+                <button
+                  type="button"
+                  onClick={() => setDueDate('')}
+                  className="text-xs text-gray-400 dark:text-gray-500 font-semibold hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
             <div className="overflow-hidden rounded-xl">
               <input
                 type="date"
