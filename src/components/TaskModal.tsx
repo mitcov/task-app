@@ -61,7 +61,7 @@ export function TaskModal({ task, existingCategories, lockedCategory, defaultDue
       priority,
       recurrence,
       recurrenceDay: recurrence === 'Weekly' || recurrence === 'Biweekly' ? recurrenceDay : undefined,
-      dueDate: dueDate || undefined,
+      dueDate: dueDate || null,
       reminderTime: reminders.some(r => r.type === 'once') ? reminderTime || undefined : undefined,
       notes: notes || undefined,
       reminders,
