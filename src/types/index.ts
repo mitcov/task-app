@@ -35,7 +35,7 @@ export interface Task {
   title: string;
   category: string;
   status: Status;
-  dueDate?: string;
+  dueDate?: string | null;
   reminderTime?: string;
   recurrence: Recurrence;
   recurrenceDay?: RecurrenceDay;
