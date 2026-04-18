@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { format } from 'date-fns';
 import { useTasks } from './hooks/useTasks';
 import { useUser } from './hooks/useUser';
 import { useTheme } from './hooks/useTheme';
@@ -153,6 +154,7 @@ function App() {
       {showAdd && (
         <TaskModal
           existingCategories={categoryNames}
+          defaultDueDate={tab === 'upcoming' ? format(new Date(), 'yyyy-MM-dd') : undefined}
           onSave={async (data) => {
             const taskData = data as Omit<Task, 'id'>;
             if (taskData.category && !categoryNames.some(c => c.toLowerCase() === taskData.category.toLowerCase())) {
