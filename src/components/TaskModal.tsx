@@ -6,12 +6,13 @@ interface Props {
   task?: Task;
   existingCategories: string[];
   lockedCategory?: string;
+  defaultDueDate?: string;
   onSave: (data: Omit<Task, 'id'> | Partial<Task>, id?: string) => void;
   onDelete?: (id: string) => void;
   onClose: () => void;
 }
 
-export function TaskModal({ task, existingCategories, lockedCategory, onSave, onDelete, onClose }: Props) {
+export function TaskModal({ task, existingCategories, lockedCategory, defaultDueDate, onSave, onDelete, onClose }: Props) {
   const isEdit = !!task;
 
   const [title, setTitle] = useState(task?.title || '');
@@ -22,7 +23,7 @@ export function TaskModal({ task, existingCategories, lockedCategory, onSave, on
   const [priority, setPriority] = useState<Priority>(task?.priority || 'Medium');
   const [recurrence, setRecurrence] = useState<Recurrence>(task?.recurrence || 'None');
   const [recurrenceDay, setRecurrenceDay] = useState<RecurrenceDay>(task?.recurrenceDay || 'Sunday');
-  const [dueDate, setDueDate] = useState(task?.dueDate ? task.dueDate.split('T')[0] : '');
+  const [dueDate, setDueDate] = useState(task?.dueDate ? task.dueDate.split('T')[0] : (defaultDueDate || ''));
   const [reminderTime, setReminderTime] = useState(task?.reminderTime || '');
   const [reminders, setReminders] = useState<Reminder[]>(task?.reminders || []);
   const [notes, setNotes] = useState(task?.notes || '');
