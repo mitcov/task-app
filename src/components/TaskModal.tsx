@@ -195,13 +195,22 @@ export function TaskModal({ task, existingCategories, lockedCategory, defaultDue
             <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1 block">
               Due Date (optional)
             </label>
-            <div className="overflow-hidden rounded-xl">
+            <div className="relative overflow-hidden rounded-xl">
               <input
                 type="date"
                 value={dueDate}
                 onChange={e => setDueDate(e.target.value)}
                 className="w-full border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
               />
+              {dueDate && (
+                <button
+                  type="button"
+                  onPointerDown={e => { e.preventDefault(); setDueDate(''); }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 text-lg leading-none"
+                >
+                  ×
+                </button>
+              )}
             </div>
           </div>
 
